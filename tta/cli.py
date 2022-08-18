@@ -1,4 +1,3 @@
-from typing import List
 from pathlib import Path
 import sys
 import random
@@ -21,30 +20,32 @@ from .utils import Tee
 
 @click.command()
 @click.option('--dataset_name', type=click.Choice(['CMNIST', 'RMNIST']), required=True)
-@click.option('--test_envs', type=int, multiple=True)
+@click.option('--train_domains', type=str, required=True)
+@click.option('--train_batch_size', type=int, required=True)
 @click.option('--train_fraction', type=float, required=True)
-@click.option('--calibration_fraction', type=float, required=True)
-@click.option('--batch_size', type=int, required=True)
-@click.option('--num_workers', type=int, required=True)
 @click.option('--train_steps', type=int, required=True)
-@click.option('--lr', type=float, required=True)
-@click.option('--temperature', type=float, required=True)
+@click.option('--train_lr', type=float, required=True)
+@click.option('--calibration_fraction', type=float, required=True)
+@click.option('--calibration_temperature', type=float, required=True)
 @click.option('--calibration_steps', type=int, required=True)
+@click.option('--test_batch_size', type=int, required=True)
 @click.option('--seed', type=int, required=True)
+@click.option('--num_workers', type=int, required=True)
 @click.option('--log_dir', type=click.Path(path_type=Path), required=True)
-def cli(dataset_name: str, test_envs: List[int],
-        train_fraction: float, calibration_fraction: float, batch_size: int, num_workers: int,
-        train_steps: int, lr: float, temperature: float, calibration_steps: int,
-        seed: int, log_dir: Path) -> None:
+def cli(dataset_name: str,
+        train_domains: str, train_batch_size: int, train_fraction: float, train_steps: int, train_lr: float,
+        calibration_fraction: float, calibration_temperature: float, calibration_steps: int,
+        test_batch_size: int,
+        seed: int, num_workers: int, log_dir: Path) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     sys.stdout = Tee(log_dir / 'out.txt')
     sys.stderr = Tee(log_dir / 'err.txt')
 
     device_count = jax.local_device_count()
-    assert batch_size % device_count == 0, f'batch_size should be divisible by {device_count}'
+    assert train_batch_size % device_count == 0, f'train_batch_size should be divisible by {device_count}'
+    assert test_batch_size % device_count == 0, f'test_batch_size should be divisible by {device_count}'
 
-    test_envs_set = set(test_envs)
-    T = temperature
+    train_domains_set = set(int(env) for env in train_domains.split(','))
 
     random.seed(seed)
     np.random.seed(seed)
@@ -65,17 +66,16 @@ def cli(dataset_name: str, test_envs: List[int],
     else:
         raise ValueError(f'Unknown dataset {dataset_name}')
 
-    train, calibration, test = split(dataset, test_envs_set, train_fraction, calibration_fraction, rng)
+    train, calibration, test_splits = split(dataset, train_domains_set, train_fraction, calibration_fraction, rng)
 
     key_init, key = jax.random.split(key)
     specimen = jnp.empty(dataset.input_shape)
-    state = create_train_state(key_init, C, K, T, lr, specimen)
+    state = create_train_state(key_init, C, K, calibration_temperature, train_lr, specimen)
     state = replicate(state)
 
 
     print('===> Training')
-    # TODO: would the result be deterministic if we have multiple samplers sharing a generator?
-    train_loader = InfiniteDataLoader(train, batch_size, num_workers, generator)
+    train_loader = InfiniteDataLoader(train, train_batch_size, num_workers, generator)
     for step, (X, Y, Z) in enumerate(islice(train_loader, train_steps)):
         X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
         Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
@@ -89,7 +89,7 @@ def cli(dataset_name: str, test_envs: List[int],
 
 
     print('===> Calibrating')
-    calibration_loader = InfiniteDataLoader(calibration, batch_size, num_workers, generator)
+    calibration_loader = InfiniteDataLoader(calibration, train_batch_size, num_workers, generator)
     for step, (X, Y, Z) in enumerate(islice(calibration_loader, calibration_steps)):
         X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
         Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
@@ -107,7 +107,7 @@ def cli(dataset_name: str, test_envs: List[int],
     print('===> Inducing Source Label Prior')
     N = 0
     source_prior = jnp.zeros((C * K,))
-    calibration_loader = FastDataLoader(calibration, batch_size, num_workers, generator)
+    calibration_loader = FastDataLoader(calibration, train_batch_size, num_workers, generator)
     for X, _, _ in calibration_loader:
         remainder = X.shape[0] % device_count
         if remainder != 0:
@@ -123,23 +123,27 @@ def cli(dataset_name: str, test_envs: List[int],
 
 
     print('===> Adapting & Evaluating')
-    hits = 0
-    test_loader = FastDataLoader(test, batch_size, num_workers, generator)
-    for X, Y, _ in test_loader:
-        remainder = X.shape[0] % device_count
-        if remainder != 0:
-            X = X[:-remainder]
-            Y = Y[:-remainder]
+    for i, test in enumerate(test_splits):
+        hits = 0
+        test_loader = FastDataLoader(test, test_batch_size, num_workers, generator)
+        for X, Y, _ in test_loader:
+            remainder = X.shape[0] % device_count
+            if remainder != 0:
+                X = X[:-remainder]
+                Y = Y[:-remainder]
 
-        X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
-        Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
+            X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
+            Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
 
-        state = adapt_step(state, X)
+            # Adapation (online)
+            state = adapt_step(state, X)
 
-        hits += unreplicate(test_step(state, X, Y))
+            # Evaluation
+            hits += unreplicate(test_step(state, X, Y))
 
-    accuracy = hits/len(test)
-    print(f'Test accuracy: {accuracy*100}%')
+        accuracy = hits/len(test)
+        with jnp.printoptions(precision=3):
+            print(f'Environment {i}: test accuracy {accuracy*100}%')
 
 
 if __name__ == '__main__':

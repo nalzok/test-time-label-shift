@@ -1,3 +1,4 @@
+from typing import Tuple
 import sys
 
 import numpy as np
@@ -41,7 +42,7 @@ class _SplitDataset(Dataset):
         return self.underlying_dataset[self.keys]
 
 
-def split_dataset(dataset: Dataset, n: int, rng: np.random.Generator):
+def split_dataset(dataset: Dataset, n: int, rng: np.random.Generator) -> Tuple[Dataset, Dataset]:
     """
     Return a pair of datasets corresponding to a random split of the given
     dataset, with n datapoints in the first dataset and the rest in the last,
