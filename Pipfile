@@ -1,0 +1,18 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+numpy = "*"
+jax = {extras = ["tpu"]}
+flax = "*"
+torch = "==1.12.0"
+torch-xla = {file = "https://storage.googleapis.com/tpu-pytorch/wheels/tpuvm/torch_xla-1.12-cp38-cp38-linux_x86_64.whl", extras = ["tpuvm"]}
+torchvision = "*"
+click = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.8"
