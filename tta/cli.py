@@ -101,12 +101,13 @@ def cli(dataset_name: str,
             with jnp.printoptions(precision=3):
                 print(f'Calibration step {step + 1}, loss: {unreplicate(loss)}')
 
+    # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
 
 
     print('===> Inducing Source Label Prior')
     N = 0
-    source_prior = jnp.zeros((C * K,))
+    source_prior = jnp.zeros((device_count, C * K))
     calibration_loader = FastDataLoader(calibration, train_batch_size, num_workers, generator)
     for X, _, _ in calibration_loader:
         remainder = X.shape[0] % device_count
@@ -115,11 +116,11 @@ def cli(dataset_name: str,
 
         N += X.shape[0]
         X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
-        source_prior = source_prior + unreplicate(induce_step(state, X))
+        source_prior = source_prior + induce_step(state, X)
 
     params = state.params.unfreeze()
-    params['source_prior'] = replicate(source_prior / N)
-    state = state.replace(params=flax.core.frozen_dict.unfreeze(params))
+    params['source_prior'] = source_prior / N
+    state = state.replace(params=flax.core.frozen_dict.freeze(params))
 
 
     print('===> Adapting & Evaluating')

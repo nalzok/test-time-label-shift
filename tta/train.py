@@ -98,7 +98,7 @@ def adapt_step(state: TrainState, X: jnp.ndarray) -> TrainState:
 
     def cond_fun(val):
         prev_objective, objective, iters, _ = val
-        return jnp.logical_or(iters < 2,    # due to numerical instability, the first iteration might decrease the objective
+        return jnp.logical_or(objective < 0,    # the initial iterations might decrease the objective due to numerical instability
                               jnp.logical_and(iters < 1e4,
                                               objective - prev_objective > 1e-2))
 
@@ -113,15 +113,17 @@ def adapt_step(state: TrainState, X: jnp.ndarray) -> TrainState:
         # M step
         target_prior = jax.lax.pmean(jnp.mean(target_likelihood, axis=0), axis_name='batch')
 
-        w = source_prior / target_prior
-        objective_i = jnp.log(jnp.sum(w * source_likelihood, axis=-1))
+        log_w = jnp.log(source_prior) - jnp.log(target_prior)
+        objective_i = jax.nn.logsumexp(log_w, axis=-1, b=source_likelihood)
         objective = jax.lax.psum(jnp.sum(objective_i), axis_name='batch')
 
         return prev_objective, objective, iters + 1, target_prior
 
     _, _, _, target_prior = jax.lax.while_loop(cond_fun, body_fun, init_val)
 
-    state.params['target_prior'] = target_prior
+    params = state.params.unfreeze()
+    params['target_prior'] = target_prior
+    state = state.replace(params=flax.core.frozen_dict.freeze(params))
 
     return state
 

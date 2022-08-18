@@ -114,9 +114,9 @@ def split(dataset: MultipleDomainDataset, train_domains: Set[int],
 
     for i, domain in enumerate(dataset.domains):
         train, test = split_dataset(domain, int(len(domain)*train_fraction), rng)
-        calibrate, train = split_dataset(train, int(len(domain)*calibration_fraction), rng)
 
         if i in train_domains:
+            calibrate, train = split_dataset(train, int(len(domain)*calibration_fraction), rng)
             train_splits.append(train)
             calibrate_splits.append(calibrate)
 
