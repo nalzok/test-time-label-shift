@@ -59,7 +59,7 @@ def cli(dataset_name: str,
     root = 'data/'
     if dataset_name == 'CMNIST':
         C = 2
-        K = 2   # should be 2, but maybe we can use 3 for an extra "unseen" class?
+        K = 3   # should be 2, but maybe we can use 3 for an extra "unseen" class?
         dataset = ColoredMNIST(root)
     elif dataset_name == 'RMNIST':
         C = 10
