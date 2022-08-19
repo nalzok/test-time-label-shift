@@ -94,16 +94,14 @@ def adapt_step(state: TrainState, X: jnp.ndarray) -> TrainState:
     source_likelihood = state.calibrated_fn(variables, X, False)
     source_prior = state.params['source_prior']
 
-    init_val = (float('-inf'), 0, 0, source_prior)
+    init_val = (-1.0, 0.0, source_prior)
 
     def cond_fun(val):
-        prev_objective, objective, iters, _ = val
-        return jnp.logical_or(objective < 0,    # the initial iterations might decrease the objective due to numerical instability
-                              jnp.logical_and(iters < 1e4,
-                                              objective - prev_objective > 1e-2))
+        prev_objective, objective,  _ = val
+        return objective - prev_objective > 0
 
     def body_fun(val):
-        _, prev_objective, iters, target_prior = val
+        _, prev_objective, target_prior = val
 
         # E step
         target_likelihood = target_prior * source_likelihood / source_prior
@@ -113,13 +111,13 @@ def adapt_step(state: TrainState, X: jnp.ndarray) -> TrainState:
         # M step
         target_prior = jax.lax.pmean(jnp.mean(target_likelihood, axis=0), axis_name='batch')
 
-        log_w = jnp.log(source_prior) - jnp.log(target_prior)
+        log_w = jnp.log(target_prior) - jnp.log(source_prior)
         objective_i = jax.nn.logsumexp(log_w, axis=-1, b=source_likelihood)
         objective = jax.lax.psum(jnp.sum(objective_i), axis_name='batch')
 
-        return prev_objective, objective, iters + 1, target_prior
+        return prev_objective, objective, target_prior
 
-    _, _, _, target_prior = jax.lax.while_loop(cond_fun, body_fun, init_val)
+    _, _, target_prior = jax.lax.while_loop(cond_fun, body_fun, init_val)
 
     params = state.params.unfreeze()
     params['target_prior'] = target_prior

@@ -8,6 +8,7 @@ run:
 		--train_fraction 0.8 \
 		--train_steps 5000 \
 		--train_lr 1e-3 \
+		--source_prior_estimation induce \
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
 		--calibration_steps 500 \

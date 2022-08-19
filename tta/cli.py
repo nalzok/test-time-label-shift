@@ -10,11 +10,12 @@ import flax
 from flax.jax_utils import replicate, unreplicate
 import numpy as np
 import torch
+from torch.utils.data import Dataset
 import click
 
 from .datasets import ColoredMNIST, RotatedMNIST, split
 from .fast_data_loader import InfiniteDataLoader, FastDataLoader 
-from .train import create_train_state, train_step, calibration_step, cross_replica_mean, induce_step, adapt_step, test_step
+from .train import TrainState, create_train_state, train_step, calibration_step, cross_replica_mean, induce_step, adapt_step, test_step
 from .utils import Tee
 
 
@@ -25,6 +26,7 @@ from .utils import Tee
 @click.option('--train_fraction', type=float, required=True)
 @click.option('--train_steps', type=int, required=True)
 @click.option('--train_lr', type=float, required=True)
+@click.option('--source_prior_estimation', type=click.Choice(['count', 'induce', 'average']), required=True)
 @click.option('--calibration_fraction', type=float, required=True)
 @click.option('--calibration_temperature', type=float, required=True)
 @click.option('--calibration_steps', type=int, required=True)
@@ -34,7 +36,7 @@ from .utils import Tee
 @click.option('--log_dir', type=click.Path(path_type=Path), required=True)
 def cli(dataset_name: str,
         train_domains: str, train_batch_size: int, train_fraction: float, train_steps: int, train_lr: float,
-        calibration_fraction: float, calibration_temperature: float, calibration_steps: int,
+        source_prior_estimation: str, calibration_fraction: float, calibration_temperature: float, calibration_steps: int,
         test_batch_size: int,
         seed: int, num_workers: int, log_dir: Path) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -57,7 +59,7 @@ def cli(dataset_name: str,
     root = 'data/'
     if dataset_name == 'CMNIST':
         C = 2
-        K = 3
+        K = 2   # should be 2, but maybe we can use 3 for an extra "unseen" class?
         dataset = ColoredMNIST(root)
     elif dataset_name == 'RMNIST':
         C = 10
@@ -75,8 +77,8 @@ def cli(dataset_name: str,
 
 
     print('===> Training')
-    train_loader = InfiniteDataLoader(train, train_batch_size, num_workers, generator)
-    for step, (X, Y, Z) in enumerate(islice(train_loader, train_steps)):
+    inf_train_loader = InfiniteDataLoader(train, train_batch_size, num_workers, generator)
+    for step, (X, Y, Z) in enumerate(islice(inf_train_loader, train_steps)):
         X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
         Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
         Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
@@ -89,8 +91,8 @@ def cli(dataset_name: str,
 
 
     print('===> Calibrating')
-    calibration_loader = InfiniteDataLoader(calibration, train_batch_size, num_workers, generator)
-    for step, (X, Y, Z) in enumerate(islice(calibration_loader, calibration_steps)):
+    inf_calibration_loader = InfiniteDataLoader(calibration, train_batch_size, num_workers, generator)
+    for step, (X, Y, Z) in enumerate(islice(inf_calibration_loader, calibration_steps)):
         X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
         Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
         Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
@@ -105,27 +107,26 @@ def cli(dataset_name: str,
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
 
 
-    print('===> Inducing Source Label Prior')
-    N = 0
-    source_prior = jnp.zeros((device_count, C * K))
-    calibration_loader = FastDataLoader(calibration, train_batch_size, num_workers, generator)
-    for X, _, _ in calibration_loader:
-        remainder = X.shape[0] % device_count
-        if remainder != 0:
-            X = X[:-remainder]
-
-        N += X.shape[0]
-        X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
-        source_prior = source_prior + induce_step(state, X)
+    print('===> Estimating Source Label Prior')
+    if source_prior_estimation == 'average':
+        source_prior_count = estimate_source_prior(train, train_batch_size, num_workers, generator,
+                              C, K, device_count, state, 'count')
+        source_prior_induce = estimate_source_prior(train, train_batch_size, num_workers, generator,
+                              C, K, device_count, state, 'induce')
+        source_prior = (source_prior_count + source_prior_induce) / 2
+    else:
+        source_prior = estimate_source_prior(train, train_batch_size, num_workers, generator,
+                              C, K, device_count, state, source_prior_estimation)
 
     params = state.params.unfreeze()
-    params['source_prior'] = source_prior / N
+    params['source_prior'] = source_prior
     state = state.replace(params=flax.core.frozen_dict.freeze(params))
 
 
     print('===> Adapting & Evaluating')
     for i, test in enumerate(test_splits):
-        hits = 0
+        unadapted_hits = 0
+        adapted_hits = 0
         test_loader = FastDataLoader(test, test_batch_size, num_workers, generator)
         for X, Y, _ in test_loader:
             remainder = X.shape[0] % device_count
@@ -136,15 +137,55 @@ def cli(dataset_name: str,
             X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
             Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
 
-            # Adapation (online)
+            # Without adaptation
+            params = state.params.unfreeze()
+            params['target_prior'] = params['source_prior']
+            state = state.replace(params=flax.core.frozen_dict.freeze(params))
+
+            unadapted_hits += unreplicate(test_step(state, X, Y))
+
+            # With adaptation
             state = adapt_step(state, X)
 
             # Evaluation
-            hits += unreplicate(test_step(state, X, Y))
+            adapted_hits += unreplicate(test_step(state, X, Y))
 
-        accuracy = hits/len(test)
+        unadapted_accuracy = unadapted_hits/len(test)
+        adapted_accuracy = adapted_hits/len(test)
         with jnp.printoptions(precision=3):
-            print(f'Environment {i}: test accuracy {accuracy*100}%')
+            print(f'Environment {i}: test accuracy {unadapted_accuracy} -> {adapted_accuracy}')
+
+
+def estimate_source_prior(train: Dataset, train_batch_size: int, num_workers: int, generator: torch.Generator,
+                          C: int, K: int, device_count: int, state: TrainState, method: str) -> jnp.ndarray:
+    train_loader = FastDataLoader(train, train_batch_size, num_workers, generator)
+    if method == 'count':
+        source_prior = np.zeros((C * K))
+        I = np.identity(C * K)
+        for _, Y, Z in train_loader:
+            M = Y * K + Z
+            source_prior += np.sum(I[M], axis=0)
+
+        source_prior = replicate(jnp.array(source_prior / np.sum(source_prior)))
+
+    elif method == 'induce':
+        N = 0
+        source_prior = jnp.zeros((device_count, C * K))
+        for X, _, _ in train_loader:
+            remainder = X.shape[0] % device_count
+            if remainder != 0:
+                X = X[:-remainder]
+
+            N += X.shape[0]
+            X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
+            source_prior = source_prior + induce_step(state, X)
+
+        source_prior = source_prior / N
+
+    else:
+        raise ValueError(f'Unknown source label prior estimation method {method}')
+
+    return source_prior
 
 
 if __name__ == '__main__':
