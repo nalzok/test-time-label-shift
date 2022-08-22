@@ -15,28 +15,41 @@ class TrainState(train_state.TrainState):
     logits_fn: Callable = field(pytree_node=False)
     calibrated_fn: Callable = field(pytree_node=False)
     batch_stats: flax.core.FrozenDict[str, jnp.ndarray]
+    prior: flax.core.FrozenDict[str, jnp.ndarray]
 
 
-def create_train_state(key: Any, C: int, K: int, T:float, learning_rate: float, specimen: jnp.ndarray) -> TrainState:
+def create_train_state(key: Any, C: int, K: int, T: float, learning_rate: float, specimen: jnp.ndarray) -> TrainState:
     net = AdaptiveResNet18(C=C, K=K, T=T)
+
     variables = net.init(key, specimen, True)
+    variables, params = variables.pop('params')
+    variables, batch_stats = variables.pop('batch_stats')
+    variables, prior = variables.pop('prior')
+    assert not variables
+
     tx = optax.adam(learning_rate)
     state = TrainState.create(
+            apply_fn=net.apply,
+            params=params,
+            tx=tx,
             logits_fn=partial(net.apply, method=net.logits),
             calibrated_fn=partial(net.apply, method=net.calibrated),
-            apply_fn=net.apply,
-            params=variables['params'],
-            tx=tx,
-            batch_stats=variables['batch_stats'],
+            batch_stats=batch_stats,
+            prior=prior,
     )
+
     return state
 
 
-@partial(jax.pmap, axis_name='batch')
+@partial(jax.pmap, axis_name='batch', donate_argnums=(0,))
 def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) -> Tuple[TrainState, jnp.ndarray]:
     @partial(jax.value_and_grad, has_aux=True)
     def loss_fn(params):
-        variables = {'params': params, 'batch_stats': state.batch_stats}
+        variables = {
+            'params': params,
+            'batch_stats': state.batch_stats,
+            'prior': state.prior
+        }
         logits, new_model_state = state.logits_fn(
             variables, X, True, mutable=['batch_stats']
         )
@@ -56,11 +69,15 @@ def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) -> Tuple[Train
     return state, jax.lax.psum(loss, axis_name='batch')
 
 
-@partial(jax.pmap, axis_name='batch')
-def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) -> Tuple[TrainState, jnp.ndarray]:
+@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3,), donate_argnums=(0,))
+def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, multiplier: float) -> Tuple[TrainState, jnp.ndarray]:
     @partial(jax.value_and_grad)
     def loss_fn(params):
-        variables = {'params': params, 'batch_stats': state.batch_stats}
+        variables = {
+            'params': params,
+            'batch_stats': state.batch_stats,
+            'prior': state.prior
+        }
         source_likelihood = state.calibrated_fn(variables, X, False)
         logits = jnp.log(source_likelihood)
 
@@ -69,7 +86,7 @@ def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) -> Tuple
         return loss.sum()
 
     loss, grads = loss_fn(state.params)
-    grads = jax.lax.psum(grads, axis_name='batch')
+    grads = jax.tree_util.tree_map(lambda x: multiplier * x, jax.lax.psum(grads, axis_name='batch'))
 
     state = state.apply_gradients(grads=grads)
 
@@ -81,18 +98,26 @@ cross_replica_mean: Callable = jax.pmap(lambda x: jax.lax.pmean(x, 'batch'), 'ba
 
 @partial(jax.pmap, axis_name='batch')
 def induce_step(state: TrainState, X: jnp.ndarray) -> jnp.ndarray:
-    variables = {'params': state.params, 'batch_stats': state.batch_stats}
+    variables = {
+        'params': state.params,
+        'batch_stats': state.batch_stats,
+        'prior': state.prior
+    }
     source_likelihood = state.calibrated_fn(variables, X, False)
     source_likelihood = jax.lax.psum(jnp.sum(source_likelihood, axis=0), axis_name='batch')
 
     return source_likelihood
 
 
-@partial(jax.pmap, axis_name='batch')
+@partial(jax.pmap, axis_name='batch', donate_argnums=(0,))
 def adapt_step(state: TrainState, X: jnp.ndarray) -> TrainState:
-    variables = {'params': state.params, 'batch_stats': state.batch_stats}
+    variables = {
+        'params': state.params,
+        'batch_stats': state.batch_stats,
+        'prior': state.prior
+    }
     source_likelihood = state.calibrated_fn(variables, X, False)
-    source_prior = state.params['source_prior']
+    source_prior = state.prior['source']
 
     init_val = (-1.0, 0.0, source_prior)
 
@@ -119,16 +144,20 @@ def adapt_step(state: TrainState, X: jnp.ndarray) -> TrainState:
 
     _, _, target_prior = jax.lax.while_loop(cond_fun, body_fun, init_val)
 
-    params = state.params.unfreeze()
-    params['target_prior'] = target_prior
-    state = state.replace(params=flax.core.frozen_dict.freeze(params))
+    prior = state.prior.unfreeze()
+    prior['target'] = target_prior
+    state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
 
     return state
 
  
 @partial(jax.pmap, axis_name='batch')
 def test_step(state: TrainState, image: jnp.ndarray, label: jnp.ndarray) -> jnp.ndarray:
-    variables = {'params': state.params, 'batch_stats': state.batch_stats}
+    variables = {
+        'params': state.params,
+        'batch_stats': state.batch_stats,
+        'prior': state.prior
+    }
     target_likelihood = state.apply_fn(variables, image, False)
     prediction = jnp.argmax(target_likelihood, axis=-1)
     hit = jnp.sum(prediction == label)

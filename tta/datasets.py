@@ -17,14 +17,15 @@ class MultipleDomainDataset:
 
     def __init__(self) -> None:
         super().__init__()
-        self.generator = torch.Generator().manual_seed(42)
 
 
 class MultipleEnvironmentMNIST(MultipleDomainDataset):
-    def __init__(self, root, environments, dataset_transform, input_shape):
+    def __init__(self, root, generator, environments, dataset_transform, input_shape):
         super().__init__()
         if root is None:
             raise ValueError('Data directory not specified!')
+
+        self.generator = generator
 
         original_dataset_tr = MNIST(root, train=True, download=False)
         original_dataset_te = MNIST(root, train=False, download=False)
@@ -35,7 +36,6 @@ class MultipleEnvironmentMNIST(MultipleDomainDataset):
         original_labels = torch.cat((original_dataset_tr.targets,
                                      original_dataset_te.targets))
 
-        generator = torch.Generator().manual_seed(42)
         shuffle = torch.randperm(len(original_images), generator=generator)
 
         original_images = original_images[shuffle]
@@ -52,8 +52,8 @@ class MultipleEnvironmentMNIST(MultipleDomainDataset):
 
 
 class ColoredMNIST(MultipleEnvironmentMNIST):
-    def __init__(self, root):
-        super().__init__(root, [0.1, 0.2, 0.9], self.color_dataset, (1, 28, 28, 2))
+    def __init__(self, root, generator):
+        super().__init__(root, generator, [0.1, 0.2, 0.9], self.color_dataset, (1, 28, 28, 2))
 
     def color_dataset(self, images, labels, environment):
         # Assign a binary label based on the digit
@@ -85,8 +85,8 @@ class ColoredMNIST(MultipleEnvironmentMNIST):
 
 
 class RotatedMNIST(MultipleEnvironmentMNIST):
-    def __init__(self, root):
-        super().__init__(root, [0, 15, 30, 45, 60, 75], self.rotate_dataset, (1, 28, 28, 1))
+    def __init__(self, root, generator):
+        super().__init__(root, generator, [0, 15, 30, 45, 60, 75], self.rotate_dataset, (1, 28, 28, 1))
 
     def rotate_dataset(self, images, labels, angle):
         rotation = T.Compose([

@@ -14,12 +14,14 @@ class AdaptiveResNet18(nn.Module):
         self.M = self.C * self.K
         self.resnet = ResNet18(num_classes=self.M)
         self.b = self.param('b', jax.nn.initializers.zeros, (self.M,))
-        self.source_prior = self.param('source_prior',
-                                       jax.nn.initializers.constant(1/self.M,),
-                                       (self.M,))
-        self.target_prior = self.param('target_prior',
-                                       jax.nn.initializers.constant(1/self.M,),
-                                       (self.M,))
+        self.source_prior = self.variable('prior', 'source',
+                                          jax.nn.initializers.constant(1/self.M,),
+                                          None,
+                                          (self.M,))
+        self.target_prior = self.variable('prior', 'target',
+                                          jax.nn.initializers.constant(1/self.M,),
+                                          None,
+                                          (self.M,))
 
     def logits(self, x, train: bool):
         l = self.resnet(x, train)
@@ -40,7 +42,7 @@ class AdaptiveResNet18(nn.Module):
         source_likelihood = self.calibrated(x, train)
 
         # adaptation
-        w = self.target_prior / self.source_prior
+        w = self.target_prior.value / self.source_prior.value
         source_likelihood = w * source_likelihood
         source_likelihood = source_likelihood.reshape((-1, self.C, self.K))
         source_likelihood = jnp.sum(source_likelihood, axis=-1)

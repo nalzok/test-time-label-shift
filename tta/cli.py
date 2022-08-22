@@ -30,6 +30,7 @@ from .utils import Tee
 @click.option('--calibration_fraction', type=float, required=True)
 @click.option('--calibration_temperature', type=float, required=True)
 @click.option('--calibration_steps', type=int, required=True)
+@click.option('--calibration_multiplier', type=float, required=True)
 @click.option('--test_batch_size', type=int, required=True)
 @click.option('--seed', type=int, required=True)
 @click.option('--num_workers', type=int, required=True)
@@ -37,11 +38,14 @@ from .utils import Tee
 def cli(dataset_name: str,
         train_domains: str, train_batch_size: int, train_fraction: float, train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_fraction: float, calibration_temperature: float, calibration_steps: int,
-        test_batch_size: int,
-        seed: int, num_workers: int, log_dir: Path) -> None:
+        calibration_multiplier: float, test_batch_size: int, seed: int, num_workers: int, log_dir: Path) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     sys.stdout = Tee(log_dir / 'out.txt')
     sys.stderr = Tee(log_dir / 'err.txt')
+
+    print('\n', dataset_name, train_domains, train_batch_size, train_fraction, train_steps, train_lr,
+        source_prior_estimation, calibration_fraction, calibration_temperature, calibration_steps,
+        calibration_multiplier, test_batch_size, seed, num_workers, log_dir)
 
     device_count = jax.local_device_count()
     assert train_batch_size % device_count == 0, f'train_batch_size should be divisible by {device_count}'
@@ -60,11 +64,11 @@ def cli(dataset_name: str,
     if dataset_name == 'CMNIST':
         C = 2
         K = 3   # should be 2, but maybe we can use 3 for an extra "unseen" class?
-        dataset = ColoredMNIST(root)
+        dataset = ColoredMNIST(root, generator)
     elif dataset_name == 'RMNIST':
         C = 10
         K = 6
-        dataset = RotatedMNIST(root)
+        dataset = RotatedMNIST(root, generator)
     else:
         raise ValueError(f'Unknown dataset {dataset_name}')
 
@@ -76,7 +80,7 @@ def cli(dataset_name: str,
     state = replicate(state)
 
 
-    print('===> Training')
+    # print('===> Training')
     inf_train_loader = InfiniteDataLoader(train, train_batch_size, num_workers, generator)
     for step, (X, Y, Z) in enumerate(islice(inf_train_loader, train_steps)):
         X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
@@ -85,12 +89,12 @@ def cli(dataset_name: str,
         M = Y * K + Z
 
         state, loss = train_step(state, X, M)
-        if step % 100 == 0:
-            with jnp.printoptions(precision=3):
-                print(f'Train step {step + 1}, loss: {unreplicate(loss)}')
+        # if step % 10 == 0:
+        #     with jnp.printoptions(precision=3):
+        #         print(f'Train step {step + 1}, loss: {unreplicate(loss)}')
 
 
-    print('===> Calibrating')
+    # print('===> Calibrating')
     inf_calibration_loader = InfiniteDataLoader(calibration, train_batch_size, num_workers, generator)
     for step, (X, Y, Z) in enumerate(islice(inf_calibration_loader, calibration_steps)):
         X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
@@ -98,16 +102,16 @@ def cli(dataset_name: str,
         Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
         M = Y * K + Z
 
-        state, loss = calibration_step(state, X, M)
-        if step % 100 == 0:
-            with jnp.printoptions(precision=3):
-                print(f'Calibration step {step + 1}, loss: {unreplicate(loss)}')
+        state, loss = calibration_step(state, X, M, calibration_multiplier)
+        # if step % 1 == 0:
+        #     with jnp.printoptions(precision=3):
+        #         print(f'Calibration step {step + 1}, loss: {unreplicate(loss)}')
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
 
 
-    print('===> Estimating Source Label Prior')
+    # print('===> Estimating Source Label Prior')
     if source_prior_estimation == 'average':
         source_prior_count = estimate_source_prior(train, train_batch_size, num_workers, generator,
                               C, K, device_count, state, 'count')
@@ -118,14 +122,16 @@ def cli(dataset_name: str,
         source_prior = estimate_source_prior(train, train_batch_size, num_workers, generator,
                               C, K, device_count, state, source_prior_estimation)
 
-    params = state.params.unfreeze()
-    params['source_prior'] = source_prior
-    state = state.replace(params=flax.core.frozen_dict.freeze(params))
+    prior = state.prior.unfreeze()
+    prior['source'] = source_prior
+    state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
 
 
-    print('===> Adapting & Evaluating')
+    # print('===> Adapting & Evaluating')
     for i, test in enumerate(test_splits):
-        unadapted_hits = 0
+        source_hits = 0
+        indep_hits = 0
+        uniform_hits = 0
         adapted_hits = 0
         test_loader = FastDataLoader(test, test_batch_size, num_workers, generator)
         for X, Y, _ in test_loader:
@@ -137,23 +143,39 @@ def cli(dataset_name: str,
             X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
             Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
 
-            # Without adaptation
-            params = state.params.unfreeze()
-            params['target_prior'] = params['source_prior']
-            state = state.replace(params=flax.core.frozen_dict.freeze(params))
+            # Source
+            prior = state.prior.unfreeze()
+            prior['target'] = prior['source']
+            state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
 
-            unadapted_hits += unreplicate(test_step(state, X, Y))
+            source_hits += unreplicate(test_step(state, X, Y))
 
-            # With adaptation
+            # Independent
+            prior = state.prior.unfreeze()
+            prior['target'] = jnp.tile(jnp.mean(prior['source'].reshape((device_count, C, K)), axis=-1), (1, 1, K)).reshape(device_count, -1)
+            state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
+
+            indep_hits += unreplicate(test_step(state, X, Y))
+
+            # Uniform
+            prior = state.prior.unfreeze()
+            prior['target'] = jnp.ones_like(prior['target']) / K / C
+            state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
+
+            uniform_hits += unreplicate(test_step(state, X, Y))
+
+            # Adaptation
             state = adapt_step(state, X)
 
-            # Evaluation
             adapted_hits += unreplicate(test_step(state, X, Y))
 
-        unadapted_accuracy = unadapted_hits/len(test)
+        source_accuracy = source_hits/len(test)
+        indep_accuracy = indep_hits/len(test)
+        uniform_accuracy = uniform_hits/len(test)
         adapted_accuracy = adapted_hits/len(test)
         with jnp.printoptions(precision=3):
-            print(f'Environment {i}: test accuracy {unadapted_accuracy} -> {adapted_accuracy}')
+            print(f'Environment {i}: test accuracy {source_accuracy:.4f} (source), {indep_accuracy:.4f} (independent), '
+                  f'{uniform_accuracy:.4f} (uniform), {adapted_accuracy:.4f} (adapted)')
 
 
 def estimate_source_prior(train: Dataset, train_batch_size: int, num_workers: int, generator: torch.Generator,
