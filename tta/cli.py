@@ -43,10 +43,6 @@ def cli(dataset_name: str,
     sys.stdout = Tee(log_dir / 'out.txt')
     sys.stderr = Tee(log_dir / 'err.txt')
 
-    print('\n', dataset_name, train_domains, train_batch_size, train_fraction, train_steps, train_lr,
-        source_prior_estimation, calibration_fraction, calibration_temperature, calibration_steps,
-        calibration_multiplier, test_batch_size, seed, num_workers, log_dir)
-
     device_count = jax.local_device_count()
     assert train_batch_size % device_count == 0, f'train_batch_size should be divisible by {device_count}'
     assert test_batch_size % device_count == 0, f'test_batch_size should be divisible by {device_count}'
@@ -80,7 +76,7 @@ def cli(dataset_name: str,
     state = replicate(state)
 
 
-    # print('===> Training')
+    print('===> Training')
     inf_train_loader = InfiniteDataLoader(train, train_batch_size, num_workers, generator)
     for step, (X, Y, Z) in enumerate(islice(inf_train_loader, train_steps)):
         X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
@@ -89,12 +85,12 @@ def cli(dataset_name: str,
         M = Y * K + Z
 
         state, loss = train_step(state, X, M)
-        # if step % 10 == 0:
-        #     with jnp.printoptions(precision=3):
-        #         print(f'Train step {step + 1}, loss: {unreplicate(loss)}')
+        if step % 10 == 0:
+            with jnp.printoptions(precision=3):
+                print(f'Train step {step + 1}, loss: {unreplicate(loss)}')
 
 
-    # print('===> Calibrating')
+    print('===> Calibrating')
     inf_calibration_loader = InfiniteDataLoader(calibration, train_batch_size, num_workers, generator)
     for step, (X, Y, Z) in enumerate(islice(inf_calibration_loader, calibration_steps)):
         X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
@@ -103,15 +99,15 @@ def cli(dataset_name: str,
         M = Y * K + Z
 
         state, loss = calibration_step(state, X, M, calibration_multiplier)
-        # if step % 1 == 0:
-        #     with jnp.printoptions(precision=3):
-        #         print(f'Calibration step {step + 1}, loss: {unreplicate(loss)}')
+        if step % 1 == 0:
+            with jnp.printoptions(precision=3):
+                print(f'Calibration step {step + 1}, loss: {unreplicate(loss)}')
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
 
 
-    # print('===> Estimating Source Label Prior')
+    print('===> Estimating Source Label Prior')
     if source_prior_estimation == 'average':
         source_prior_count = estimate_source_prior(train, train_batch_size, num_workers, generator,
                               C, K, device_count, state, 'count')
@@ -127,7 +123,7 @@ def cli(dataset_name: str,
     state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
 
 
-    # print('===> Adapting & Evaluating')
+    print('===> Adapting & Evaluating')
     for i, test in enumerate(test_splits):
         source_hits = 0
         indep_hits = 0
