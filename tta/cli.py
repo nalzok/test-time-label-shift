@@ -13,20 +13,23 @@ import torch
 from torch.utils.data import Dataset
 import click
 
-from .datasets import ColoredMNIST, RotatedMNIST, split
+from .datasets import split
+from .datasets.mnist import ColoredMNIST, RotatedMNIST
+from .datasets.coco import ColoredCOCO
 from .fast_data_loader import InfiniteDataLoader, FastDataLoader 
 from .train import TrainState, create_train_state, train_step, calibration_step, cross_replica_mean, induce_step, adapt_step, test_step
 from .utils import Tee
 
 
 @click.command()
-@click.option('--dataset_name', type=click.Choice(['CMNIST', 'RMNIST']), required=True)
+@click.option('--dataset_name', type=click.Choice(['CMNIST', 'RMNIST', 'CCOCO']), required=True)
 @click.option('--train_domains', type=str, required=True)
 @click.option('--train_batch_size', type=int, required=True)
 @click.option('--train_fraction', type=float, required=True)
 @click.option('--train_steps', type=int, required=True)
 @click.option('--train_lr', type=float, required=True)
 @click.option('--source_prior_estimation', type=click.Choice(['count', 'induce', 'average']), required=True)
+@click.option('--calibration_batch_size', type=int, required=True)
 @click.option('--calibration_fraction', type=float, required=True)
 @click.option('--calibration_temperature', type=float, required=True)
 @click.option('--calibration_steps', type=int, required=True)
@@ -37,8 +40,9 @@ from .utils import Tee
 @click.option('--log_dir', type=click.Path(path_type=Path), required=True)
 def cli(dataset_name: str,
         train_domains: str, train_batch_size: int, train_fraction: float, train_steps: int, train_lr: float,
-        source_prior_estimation: str, calibration_fraction: float, calibration_temperature: float, calibration_steps: int,
-        calibration_multiplier: float, test_batch_size: int, seed: int, num_workers: int, log_dir: Path) -> None:
+        source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
+        calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
+        test_batch_size: int, seed: int, num_workers: int, log_dir: Path) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     sys.stdout = Tee(log_dir / 'out.txt')
     sys.stderr = Tee(log_dir / 'err.txt')
@@ -59,12 +63,18 @@ def cli(dataset_name: str,
     root = 'data/'
     if dataset_name == 'CMNIST':
         C = 2
-        K = 3   # should be 2, but maybe we can use 3 for an extra "unseen" class?
+        K = 2
         dataset = ColoredMNIST(root, generator)
     elif dataset_name == 'RMNIST':
         C = 10
         K = 6
         dataset = RotatedMNIST(root, generator)
+    elif dataset_name == 'CCOCO':
+        C = 9
+        K = 9
+        root = 'data/COCO/val2017'
+        annFile = 'data/COCO/annotations/instances_val2017.json'
+        dataset = ColoredCOCO(root, annFile, generator)
     else:
         raise ValueError(f'Unknown dataset {dataset_name}')
 
@@ -91,7 +101,7 @@ def cli(dataset_name: str,
 
 
     print('===> Calibrating')
-    inf_calibration_loader = InfiniteDataLoader(calibration, train_batch_size, num_workers, generator)
+    inf_calibration_loader = InfiniteDataLoader(calibration, calibration_batch_size, num_workers, generator)
     for step, (X, Y, Z) in enumerate(islice(inf_calibration_loader, calibration_steps)):
         X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
         Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])

@@ -1,19 +1,34 @@
 # Test time label shift adaptation
 
-## CMNIST results
+## CMNIST
 
-With K = 2,
-
-```
-Environment 0: test accuracy 0.8161560297012329 -> 0.8159417510032654
-Environment 1: test accuracy 0.7705163955688477 -> 0.7613027691841125
-Environment 2: test accuracy 0.3535462021827698 -> 0.7013070583343506
-```
-
-With K = 3,
+Hyper-parameters
 
 ```
-Environment 0: test accuracy 0.8437969088554382 -> 0.8491536378860474
-Environment 1: test accuracy 0.7803728580474854 -> 0.7713735103607178
-Environment 2: test accuracy 0.31390616297721863 -> 0.7105206847190857
+pipenv run python3 \
+    -m tta.cli \
+    --dataset_name CMNIST \
+    --train_domains 0,1 \
+    --train_batch_size 64 \
+    --train_fraction 0.8 \
+    --train_steps 1000 \
+    --train_lr 1e-3 \
+    --source_prior_estimation induce \
+    --calibration_batch_size 64 \
+    --calibration_fraction 0.1 \
+    --calibration_temperature 10 \
+    --calibration_steps 100 \
+    --calibration_multiplier 1 \
+    --test_batch_size 512 \
+    --seed 360234358 \
+    --num_workers 8 \
+    --log_dir logs
+```
+
+Results
+
+```
+Environment 0: test accuracy 0.9025 (source), 0.5646 (independent), 0.5637 (uniform), 0.9014 (adapted)
+Environment 1: test accuracy 0.8140 (source), 0.5910 (independent), 0.5895 (uniform), 0.8123 (adapted)
+Environment 2: test accuracy 0.0896 (source), 0.7574 (independent), 0.7577 (uniform), 0.9098 (adapted)
 ```
