@@ -86,7 +86,8 @@ def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, multipli
         return loss.sum()
 
     loss, grads = loss_fn(state.params)
-    grads = jax.tree_util.tree_map(lambda x: multiplier * x, jax.lax.psum(grads, axis_name='batch'))
+    grads = jax.lax.psum(grads, axis_name='batch')
+    grads = jax.tree_util.tree_map(lambda x: multiplier * x, grads)
 
     state = state.apply_gradients(grads=grads)
 

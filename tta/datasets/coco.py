@@ -1,5 +1,6 @@
 # Forked from https://github.com/facebookresearch/DomainBed/blob/main/domainbed/datasets.py
-import os
+from pathlib import Path
+from hashlib import sha256
 
 import numpy as np
 import torch
@@ -38,10 +39,20 @@ class ColoredCOCO(MultipleDomainDataset):
 
     environments = [0.9, 0.8, 0.1]
 
-    def __init__(self, root, annFile, generator):
+    def __init__(self, root: Path, annFile: Path, generator: torch.Generator):
         super().__init__((1, 64, 64, 3))
         if root is None:
             raise ValueError('Data directory not specified!')
+
+        m = sha256()
+        m.update(str(annFile).encode())
+        cache_key = m.hexdigest()
+        cache_file = root / 'cached' / f'{cache_key}.pt'
+        if cache_file.is_file():
+            # NOTE: The RNG state won't be the same if we load from cache
+            print(f'Loading cached datasets from {cache_file}')
+            self.domains = torch.load(cache_file)
+            return
 
         self.root = root
         self.coco = COCO(annFile)
@@ -57,16 +68,22 @@ class ColoredCOCO(MultipleDomainDataset):
         shuffle = torch.randperm(len(self.image_ids), generator=generator)
 
         num_classes = len(self.backgrounds)
-        confounding = np.eye(num_classes)
-        independent = np.ones_like(confounding) * 1/num_classes
+        independent = np.ones((num_classes, num_classes)) * 1/num_classes
+        confounding1 = np.eye(num_classes)
+        confounding1 = 0.75 * confounding1 + 0.25 * independent
+        confounding2 = np.roll(confounding1, shift=1, axis=1)
 
         for i, strength in enumerate(self.environments):
             indices = shuffle[i::len(self.environments)]
-            prob = torch.from_numpy(strength * confounding + (1 - strength) * independent)
+            prob = torch.from_numpy(strength * confounding1 + (1-strength) * confounding2)
             domain = self.dataset_transform(indices, prob)
             self.domains.append(domain)
 
-    def dataset_transform(self, indices, prob) -> TensorDataset:
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        print(f'Saving cached datasets to {cache_file}')
+        torch.save(self.domains, cache_file)
+
+    def dataset_transform(self, indices: torch.Tensor, prob: torch.Tensor) -> TensorDataset:
         X, Y, Z = [], [], []
         p = torch.cumsum(prob, dim=1)
         to_tensor = ToTensor()
@@ -74,7 +91,7 @@ class ColoredCOCO(MultipleDomainDataset):
         for sample_idx in indices:
             image_id = self.image_ids[sample_idx]
             image_json, = self.coco.loadImgs(image_id)
-            image = Image.open(os.path.join(self.root, image_json['file_name'])).convert('RGB')
+            image = Image.open(self.root / image_json['file_name']).convert('RGB')
             anns = self.coco.loadAnns(self.coco.getAnnIds(
                 imgIds=image_id,
                 catIds=self.cat_ids,

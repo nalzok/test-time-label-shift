@@ -17,7 +17,16 @@ from .datasets import split
 from .datasets.mnist import ColoredMNIST, RotatedMNIST
 from .datasets.coco import ColoredCOCO
 from .fast_data_loader import InfiniteDataLoader, FastDataLoader 
-from .train import TrainState, create_train_state, train_step, calibration_step, cross_replica_mean, induce_step, adapt_step, test_step
+from .train import (
+    TrainState,
+    create_train_state,
+    train_step,
+    calibration_step,
+    cross_replica_mean,
+    induce_step,
+    adapt_step,
+    test_step
+)
 from .utils import Tee
 
 
@@ -49,6 +58,7 @@ def cli(dataset_name: str,
 
     device_count = jax.local_device_count()
     assert train_batch_size % device_count == 0, f'train_batch_size should be divisible by {device_count}'
+    assert calibration_batch_size % device_count == 0, f'calibration_batch_size should be divisible by {device_count}'
     assert test_batch_size % device_count == 0, f'test_batch_size should be divisible by {device_count}'
 
     train_domains_set = set(int(env) for env in train_domains.split(','))
@@ -60,25 +70,29 @@ def cli(dataset_name: str,
     rng = np.random.default_rng(seed)
     generator = torch.Generator().manual_seed(seed)
 
-    root = 'data/'
     if dataset_name == 'CMNIST':
         C = 2
         K = 2
+        root = Path('data/')
         dataset = ColoredMNIST(root, generator)
     elif dataset_name == 'RMNIST':
         C = 10
         K = 6
+        root = Path('data/')
         dataset = RotatedMNIST(root, generator)
     elif dataset_name == 'CCOCO':
         C = 9
         K = 9
-        root = 'data/COCO/val2017'
-        annFile = 'data/COCO/annotations/instances_val2017.json'
+        root = Path('data/COCO/train2017')
+        annFile = Path('data/COCO/annotations/instances_train2017.json')
         dataset = ColoredCOCO(root, annFile, generator)
     else:
         raise ValueError(f'Unknown dataset {dataset_name}')
 
     train, calibration, test_splits = split(dataset, train_domains_set, train_fraction, calibration_fraction, rng)
+    print('train', len(train))
+    print('calibration', len(calibration))
+    print('test_splits', len(test_splits[0]))
 
     key_init, key = jax.random.split(key)
     specimen = jnp.empty(dataset.input_shape)
@@ -95,7 +109,7 @@ def cli(dataset_name: str,
         M = Y * K + Z
 
         state, loss = train_step(state, X, M)
-        if step % 10 == 0:
+        if step % (train_steps // 20) == 0:
             with jnp.printoptions(precision=3):
                 print(f'Train step {step + 1}, loss: {unreplicate(loss)}')
 
@@ -109,7 +123,7 @@ def cli(dataset_name: str,
         M = Y * K + Z
 
         state, loss = calibration_step(state, X, M, calibration_multiplier)
-        if step % 1 == 0:
+        if step % (calibration_steps // 20) == 0:
             with jnp.printoptions(precision=3):
                 print(f'Calibration step {step + 1}, loss: {unreplicate(loss)}')
 

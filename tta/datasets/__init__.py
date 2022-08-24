@@ -16,7 +16,6 @@ class MultipleDomainDataset:
         self.domains = []
 
 
-
 def split(dataset: MultipleDomainDataset, train_domains: Set[int],
           train_fraction: float, calibration_fraction: float,
           rng: np.random.Generator) -> Tuple[ConcatDataset, ConcatDataset, List[Dataset]]:
