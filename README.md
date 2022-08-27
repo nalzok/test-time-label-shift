@@ -28,7 +28,7 @@ pipenv run python3 \
 Results
 
 ```
-Environment 0: test accuracy 0.9025 (source), 0.5646 (independent), 0.5637 (uniform), 0.9014 (adapted)
-Environment 1: test accuracy 0.8140 (source), 0.5910 (independent), 0.5895 (uniform), 0.8123 (adapted)
-Environment 2: test accuracy 0.0896 (source), 0.7574 (independent), 0.7577 (uniform), 0.9098 (adapted)
+Environment 0: test accuracy 0.9025 (source), 0.5517 (independent), 0.5637 (uniform), 0.9014 (adapted)
+Environment 1: test accuracy 0.8140 (source), 0.5794 (independent), 0.5895 (uniform), 0.8123 (adapted)
+Environment 2: test accuracy 0.0896 (source), 0.6837 (independent), 0.7577 (uniform), 0.9098 (adapted)
 ```

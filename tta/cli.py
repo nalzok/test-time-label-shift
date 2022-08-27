@@ -172,7 +172,11 @@ def cli(dataset_name: str,
 
             # Independent
             prior = state.prior.unfreeze()
-            prior['target'] = jnp.tile(jnp.mean(prior['source'].reshape((device_count, C, K)), axis=-1), (1, 1, K)).reshape(device_count, -1)
+            joint_source = unreplicate(prior['source']).reshape((C, K))
+            marginal_y = jnp.sum(joint_source, axis=1)
+            marginal_z = jnp.sum(joint_source, axis=0)
+            joint_target = jnp.outer(marginal_y, marginal_z)
+            prior['target'] = replicate(joint_target.flatten())
             state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
 
             indep_hits += unreplicate(test_step(state, X, Y))
