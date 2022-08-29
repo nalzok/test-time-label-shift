@@ -67,9 +67,10 @@ class ColoredCOCO(MultipleDomainDataset):
 
         shuffle = torch.randperm(len(self.image_ids), generator=generator)
 
+        num_categories = len(self.categories)
         num_classes = len(self.backgrounds)
-        independent = np.ones((num_classes, num_classes)) * 1/num_classes
-        confounding1 = np.eye(num_classes)
+        independent = np.ones((num_categories, num_classes)) * 1/num_classes
+        confounding1 = np.eye(num_categories, num_classes)
         confounding1 = 0.75 * confounding1 + 0.25 * independent
         confounding2 = np.roll(confounding1, shift=1, axis=1)
 

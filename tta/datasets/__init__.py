@@ -23,7 +23,7 @@ def split(dataset: MultipleDomainDataset, train_domains: Set[int],
     calibrate_splits = []
     test_splits = []
 
-    for i, domain in enumerate(dataset.domains):
+    for i, (joint, domain) in enumerate(dataset.domains):
         train, test = split_dataset(domain, int(len(domain)*train_fraction), rng)
 
         if i in train_domains:
@@ -31,7 +31,7 @@ def split(dataset: MultipleDomainDataset, train_domains: Set[int],
             train_splits.append(train)
             calibrate_splits.append(calibrate)
 
-        test_splits.append(test)
+        test_splits.append((joint, test))
 
     train = ConcatDataset(train_splits)
     calibrate = ConcatDataset(calibrate_splits)

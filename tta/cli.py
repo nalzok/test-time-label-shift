@@ -14,7 +14,7 @@ from torch.utils.data import Dataset
 import click
 
 from .datasets import split
-from .datasets.mnist import ColoredMNIST, RotatedMNIST
+from .datasets.mnist import MultipleDomainMNIST
 from .datasets.coco import ColoredCOCO
 from .fast_data_loader import InfiniteDataLoader, FastDataLoader 
 from .train import (
@@ -31,7 +31,7 @@ from .utils import Tee
 
 
 @click.command()
-@click.option('--dataset_name', type=click.Choice(['CMNIST', 'RMNIST', 'CCOCO']), required=True)
+@click.option('--dataset_name', type=click.Choice(['MNIST', 'COCO']), required=True)
 @click.option('--train_domains', type=str, required=True)
 @click.option('--train_batch_size', type=int, required=True)
 @click.option('--train_fraction', type=float, required=True)
@@ -70,17 +70,12 @@ def cli(dataset_name: str,
     rng = np.random.default_rng(seed)
     generator = torch.Generator().manual_seed(seed)
 
-    if dataset_name == 'CMNIST':
-        C = 2
-        K = 2
-        root = Path('data/')
-        dataset = ColoredMNIST(root, generator)
-    elif dataset_name == 'RMNIST':
+    if dataset_name == 'MNIST':
         C = 10
-        K = 6
+        K = 4
         root = Path('data/')
-        dataset = RotatedMNIST(root, generator)
-    elif dataset_name == 'CCOCO':
+        dataset = MultipleDomainMNIST(root, generator)
+    elif dataset_name == 'COCO':
         C = 9
         K = 9
         root = Path('data/COCO/train2017')
@@ -92,7 +87,7 @@ def cli(dataset_name: str,
     train, calibration, test_splits = split(dataset, train_domains_set, train_fraction, calibration_fraction, rng)
     print('train', len(train))
     print('calibration', len(calibration))
-    print('test_splits', len(test_splits[0]))
+    print('test_splits[0][1]', len(test_splits[0][1]))
 
     key_init, key = jax.random.split(key)
     specimen = jnp.empty(dataset.input_shape)
@@ -148,11 +143,21 @@ def cli(dataset_name: str,
 
 
     print('===> Adapting & Evaluating')
-    for i, test in enumerate(test_splits):
-        source_hits = 0
-        indep_hits = 0
-        uniform_hits = 0
-        adapted_hits = 0
+    for i, (joint, test) in enumerate(test_splits):
+        seen = 'seen' if i in train_domains_set else 'unseen'
+        print(f'---> Environment {i} ({seen})')
+
+        joint = jnp.array(joint)
+        with jnp.printoptions(precision=4):
+            print('Ground truth p(y, z) =', joint)
+
+        estimated_joint = jnp.zeros_like(joint)
+        batches = 0
+
+        source_hits = source_norm = 0
+        indep_hits = indep_norm = 0
+        uniform_hits = uniform_norm = 0
+        adapted_hits = adapted_norm = 0
         test_loader = FastDataLoader(test, test_batch_size, num_workers, generator)
         for X, Y, _ in test_loader:
             remainder = X.shape[0] % device_count
@@ -169,6 +174,8 @@ def cli(dataset_name: str,
             state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
 
             source_hits += unreplicate(test_step(state, X, Y))
+            prior = unreplicate(state.prior['target']).reshape((C, K))
+            source_norm += jnp.linalg.norm(prior - joint)
 
             # Independent
             prior = state.prior.unfreeze()
@@ -180,6 +187,8 @@ def cli(dataset_name: str,
             state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
 
             indep_hits += unreplicate(test_step(state, X, Y))
+            prior = unreplicate(state.prior['target']).reshape((C, K))
+            indep_norm += jnp.linalg.norm(prior - joint)
 
             # Uniform
             prior = state.prior.unfreeze()
@@ -187,19 +196,34 @@ def cli(dataset_name: str,
             state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
 
             uniform_hits += unreplicate(test_step(state, X, Y))
+            prior = unreplicate(state.prior['target']).reshape((C, K))
+            uniform_norm += jnp.linalg.norm(prior - joint)
 
             # Adaptation
             state = adapt_step(state, X)
 
             adapted_hits += unreplicate(test_step(state, X, Y))
+            prior = unreplicate(state.prior['target']).reshape((C, K))
+            adapted_norm += jnp.linalg.norm(prior - joint)
 
-        source_accuracy = source_hits/len(test)
-        indep_accuracy = indep_hits/len(test)
-        uniform_accuracy = uniform_hits/len(test)
-        adapted_accuracy = adapted_hits/len(test)
-        with jnp.printoptions(precision=3):
-            print(f'Environment {i}: test accuracy {source_accuracy:.4f} (source), {indep_accuracy:.4f} (independent), '
-                  f'{uniform_accuracy:.4f} (uniform), {adapted_accuracy:.4f} (adapted)')
+            # Bookkeeping
+            estimated_joint = estimated_joint + prior
+            batches += 1
+
+        estimated_joint = estimated_joint / batches
+
+        with jnp.printoptions(precision=4):
+            print('Estimated p(y, z) =', estimated_joint)
+
+        source_accuracy = jnp.array(source_hits/len(test))
+        indep_accuracy = jnp.array(indep_hits/len(test))
+        uniform_accuracy = jnp.array(uniform_hits/len(test))
+        adapted_accuracy = jnp.array(adapted_hits/len(test))
+        with jnp.printoptions(precision=4):
+            print(f'Test accuracy {source_accuracy} (source), {indep_accuracy} (independent), '
+                  f'{uniform_accuracy} (uniform), {adapted_accuracy} (adapted)')
+            print(f'Test norm {source_norm/len(test)} (source), {indep_norm/len(test)} (independent), '
+                  f'{uniform_norm/len(test)} (uniform), {adapted_norm/len(test)} (adapted)')
 
 
 def estimate_source_prior(train: Dataset, train_batch_size: int, num_workers: int, generator: torch.Generator,
