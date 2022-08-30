@@ -110,7 +110,8 @@ def induce_step(state: TrainState, X: jnp.ndarray) -> jnp.ndarray:
     return source_likelihood
 
 
-@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(2, 3, 4), donate_argnums=(0,))
+# Adding donate_argnums=(0,) causes JAX to stuck. Maybe a bug?
+@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(2, 3, 4))
 def adapt_step(state: TrainState, X: jnp.ndarray, C: int, K: int, fix_marginal: bool) -> TrainState:
     variables = {
         'params': state.params,

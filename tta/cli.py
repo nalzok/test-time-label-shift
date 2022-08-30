@@ -146,13 +146,10 @@ def cli(dataset_name: str,
         seen = 'seen' if i in train_domains_set else 'unseen'
         print(f'---> Environment {i} ({seen})')
 
-        joint = jnp.array(joint)
-
         source_hits = source_norm = 0
-        indep_hits = indep_norm = 0
-        uniform_hits = uniform_norm = 0
         adapted_hits = adapted_norm = 0
 
+        joint = jnp.array(joint)
         test_loader = FastDataLoader(test, test_batch_size, num_workers, generator)
         for X, Y, _ in test_loader:
             remainder = X.shape[0] % device_count
@@ -169,30 +166,8 @@ def cli(dataset_name: str,
             state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
 
             source_hits += unreplicate(test_step(state, X, Y))
-            prior = unreplicate(state.prior['target']).reshape((C, K))
+            prior = unreplicate(state.prior['source']).reshape((C, K))
             source_norm += jnp.linalg.norm(prior - joint)
-
-            # Independent
-            prior = state.prior.unfreeze()
-            joint_source = unreplicate(prior['source']).reshape((C, K))
-            marginal_y = jnp.sum(joint_source, axis=1)
-            marginal_z = jnp.sum(joint_source, axis=0)
-            joint_target = jnp.outer(marginal_y, marginal_z)
-            prior['target'] = replicate(joint_target.flatten())
-            state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
-
-            indep_hits += unreplicate(test_step(state, X, Y))
-            prior = unreplicate(state.prior['target']).reshape((C, K))
-            indep_norm += jnp.linalg.norm(prior - joint)
-
-            # Uniform
-            prior = state.prior.unfreeze()
-            prior['target'] = jnp.ones_like(prior['target']) / K / C
-            state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
-
-            uniform_hits += unreplicate(test_step(state, X, Y))
-            prior = unreplicate(state.prior['target']).reshape((C, K))
-            uniform_norm += jnp.linalg.norm(prior - joint)
 
             # Adaptation
             state = adapt_step(state, X, C, K, test_fix_marginal)
@@ -202,14 +177,10 @@ def cli(dataset_name: str,
             adapted_norm += jnp.linalg.norm(prior - joint)
 
         source_accuracy = jnp.array(source_hits/len(test))
-        indep_accuracy = jnp.array(indep_hits/len(test))
-        uniform_accuracy = jnp.array(uniform_hits/len(test))
         adapted_accuracy = jnp.array(adapted_hits/len(test))
         with jnp.printoptions(precision=4):
-            print(f'Test accuracy {source_accuracy} (source), {indep_accuracy} (independent), '
-                  f'{uniform_accuracy} (uniform), {adapted_accuracy} (adapted)')
-            print(f'Test norm {source_norm/len(test)} (source), {indep_norm/len(test)} (independent), '
-                  f'{uniform_norm/len(test)} (uniform), {adapted_norm/len(test)} (adapted)')
+            print(f'Test accuracy {source_accuracy} (source), {adapted_accuracy} (adapted)')
+            print(f'Test norm {source_norm/len(test)} (source), {adapted_norm/len(test)} (adapted)')
 
 
 def estimate_source_prior(train: Dataset, train_batch_size: int, num_workers: int, generator: torch.Generator,

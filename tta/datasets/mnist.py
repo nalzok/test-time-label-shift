@@ -48,20 +48,20 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         # joint distribution of Y and Z
         independent = np.ones((C, K)) * 1/K
 
-        confounding1 = np.zeros((C, K))
+        confounder1 = np.zeros((C, K))
         idx = torch.randint(0, K, (C,), generator=self.generator)
-        confounding1[torch.arange(C), idx] = 1
-        confounding1 = 0.999 * confounding1 + 0.001 * independent
+        confounder1[torch.arange(C), idx] = 1
+        confounder1 = 0.999 * confounder1 + 0.001 * independent
 
-        confounding2 = np.zeros((C, K))
+        confounder2 = np.zeros((C, K))
         idx = torch.randint(0, K, (C,), generator=self.generator)
-        confounding2[torch.arange(C), idx] = 1
-        confounding2 = 0.999 * confounding2 + 0.001 * independent
+        confounder2[torch.arange(C), idx] = 1
+        confounder2 = 0.999 * confounder2 + 0.001 * independent
 
         for i, strength in enumerate(self.environments):
             images = original_images[i::len(self.environments)]
             labels = original_labels[i::len(self.environments)]
-            marginal = torch.from_numpy(strength * confounding1 + (1-strength) * confounding2)
+            marginal = torch.from_numpy(strength * confounder1 + (1-strength) * confounder2)
             domain = self.shift(images, labels, marginal)
 
             joint = torch.zeros_like(marginal)
