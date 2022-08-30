@@ -44,6 +44,7 @@ from .utils import Tee
 @click.option('--calibration_steps', type=int, required=True)
 @click.option('--calibration_multiplier', type=float, required=True)
 @click.option('--test_batch_size', type=int, required=True)
+@click.option('--test_fix_marginal', type=bool, required=True)
 @click.option('--seed', type=int, required=True)
 @click.option('--num_workers', type=int, required=True)
 @click.option('--log_dir', type=click.Path(path_type=Path), required=True)
@@ -51,7 +52,7 @@ def cli(dataset_name: str,
         train_domains: str, train_batch_size: int, train_fraction: float, train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
-        test_batch_size: int, seed: int, num_workers: int, log_dir: Path) -> None:
+        test_batch_size: int, test_fix_marginal: bool, seed: int, num_workers: int, log_dir: Path) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     sys.stdout = Tee(log_dir / 'out.txt')
     sys.stderr = Tee(log_dir / 'err.txt')
@@ -71,18 +72,16 @@ def cli(dataset_name: str,
     generator = torch.Generator().manual_seed(seed)
 
     if dataset_name == 'MNIST':
-        C = 10
-        K = 4
         root = Path('data/')
         dataset = MultipleDomainMNIST(root, generator)
     elif dataset_name == 'COCO':
-        C = 9
-        K = 9
         root = Path('data/COCO/train2017')
         annFile = Path('data/COCO/annotations/instances_train2017.json')
         dataset = ColoredCOCO(root, annFile, generator)
     else:
         raise ValueError(f'Unknown dataset {dataset_name}')
+
+    C, K = dataset.C, dataset.K
 
     train, calibration, test_splits = split(dataset, train_domains_set, train_fraction, calibration_fraction, rng)
     print('train', len(train))
@@ -148,16 +147,12 @@ def cli(dataset_name: str,
         print(f'---> Environment {i} ({seen})')
 
         joint = jnp.array(joint)
-        with jnp.printoptions(precision=4):
-            print('Ground truth p(y, z) =', joint)
-
-        estimated_joint = jnp.zeros_like(joint)
-        batches = 0
 
         source_hits = source_norm = 0
         indep_hits = indep_norm = 0
         uniform_hits = uniform_norm = 0
         adapted_hits = adapted_norm = 0
+
         test_loader = FastDataLoader(test, test_batch_size, num_workers, generator)
         for X, Y, _ in test_loader:
             remainder = X.shape[0] % device_count
@@ -200,20 +195,11 @@ def cli(dataset_name: str,
             uniform_norm += jnp.linalg.norm(prior - joint)
 
             # Adaptation
-            state = adapt_step(state, X)
+            state = adapt_step(state, X, C, K, test_fix_marginal)
 
             adapted_hits += unreplicate(test_step(state, X, Y))
             prior = unreplicate(state.prior['target']).reshape((C, K))
             adapted_norm += jnp.linalg.norm(prior - joint)
-
-            # Bookkeeping
-            estimated_joint = estimated_joint + prior
-            batches += 1
-
-        estimated_joint = estimated_joint / batches
-
-        with jnp.printoptions(precision=4):
-            print('Estimated p(y, z) =', estimated_joint)
 
         source_accuracy = jnp.array(source_hits/len(test))
         indep_accuracy = jnp.array(indep_hits/len(test))

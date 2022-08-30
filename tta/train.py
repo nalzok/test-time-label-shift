@@ -110,8 +110,8 @@ def induce_step(state: TrainState, X: jnp.ndarray) -> jnp.ndarray:
     return source_likelihood
 
 
-@partial(jax.pmap, axis_name='batch', donate_argnums=(0,))
-def adapt_step(state: TrainState, X: jnp.ndarray) -> TrainState:
+@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(2, 3, 4), donate_argnums=(0,))
+def adapt_step(state: TrainState, X: jnp.ndarray, C: int, K: int, fix_marginal: bool) -> TrainState:
     variables = {
         'params': state.params,
         'batch_stats': state.batch_stats,
@@ -144,6 +144,15 @@ def adapt_step(state: TrainState, X: jnp.ndarray) -> TrainState:
         return prev_objective, objective, target_prior
 
     _, _, target_prior = jax.lax.while_loop(cond_fun, body_fun, init_val)
+
+    if fix_marginal:
+        # Make sure the marginal distribution of Y does not change
+        source_prior = source_prior.reshape((C, K))
+        target_prior = target_prior.reshape((C, K))
+        source_marginal = jnp.sum(source_prior, axis=-1, keepdims=True)
+        target_marginal = jnp.sum(target_prior, axis=-1, keepdims=True)
+        target_prior = target_prior / target_marginal * source_marginal
+        target_prior = target_prior.flatten()
 
     prior = state.prior.unfreeze()
     prior['target'] = target_prior

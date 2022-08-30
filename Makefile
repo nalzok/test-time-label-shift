@@ -12,10 +12,11 @@ run:
 		--source_prior_estimation induce \
 		--calibration_batch_size 64 \
 		--calibration_fraction 0.1 \
-		--calibration_temperature 10 \
+		--calibration_temperature 1 \
 		--calibration_steps 100 \
 		--calibration_multiplier 1 \
 		--test_batch_size 512 \
+		--test_fix_marginal True \
 		--seed 360234358 \
 		--num_workers 8 \
 		--log_dir logs

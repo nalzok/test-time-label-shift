@@ -21,7 +21,10 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
     def __init__(self, root, generator):
         input_shape = (1, 28, 28, 3)
-        super().__init__(input_shape)
+        self.Z = torch.LongTensor([(c_idx, r_idx) for c_idx in range(len(self.colors)) for r_idx in range(len(self.angles))])
+        C = 10
+        K = len(self.Z)
+        super().__init__(input_shape, C, K)
 
         if root is None:
             raise ValueError('Data directory not specified!')
@@ -42,22 +45,18 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         original_images = original_images[shuffle]
         original_labels = original_labels[shuffle]
 
-        self.Z = torch.LongTensor([(c_idx, r_idx) for c_idx in range(len(self.colors)) for r_idx in range(len(self.angles))])
-
         # joint distribution of Y and Z
-        num_categories = 10
-        num_classes = len(self.Z)
-        independent = np.ones((num_categories, num_classes)) * 1/num_classes
+        independent = np.ones((C, K)) * 1/K
 
-        confounding1 = np.zeros((num_categories, num_classes))
-        idx = torch.randint(0, num_classes, (num_categories,), generator=self.generator)
-        confounding1[torch.arange(num_categories), idx] = 1
-        confounding1 = 0.9 * confounding1 + 0.1 * independent
+        confounding1 = np.zeros((C, K))
+        idx = torch.randint(0, K, (C,), generator=self.generator)
+        confounding1[torch.arange(C), idx] = 1
+        confounding1 = 0.999 * confounding1 + 0.001 * independent
 
-        confounding2 = np.zeros((num_categories, num_classes))
-        idx = torch.randint(0, num_classes, (num_categories,), generator=self.generator)
-        confounding2[torch.arange(num_categories), idx] = 1
-        confounding2 = 0.9 * confounding2 + 0.1 * independent
+        confounding2 = np.zeros((C, K))
+        idx = torch.randint(0, K, (C,), generator=self.generator)
+        confounding2[torch.arange(C), idx] = 1
+        confounding2 = 0.999 * confounding2 + 0.001 * independent
 
         for i, strength in enumerate(self.environments):
             images = original_images[i::len(self.environments)]
@@ -78,7 +77,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         N = labels.size(0)
 
         # inject noise to Y
-        weights = torch.ones((N, 10))
+        weights = torch.ones((N, self.C))
         weights[torch.arange(N), labels] += 80
         y = torch.multinomial(weights, 1, generator=self.generator).squeeze(dim=-1)
 

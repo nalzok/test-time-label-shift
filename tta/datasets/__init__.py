@@ -9,10 +9,12 @@ from ..utils import Dataset, split_dataset
 
 
 class MultipleDomainDataset:
-    def __init__(self, input_shape) -> None:
+    def __init__(self, input_shape, C, K) -> None:
         super().__init__()
 
         self.input_shape = input_shape
+        self.C = C
+        self.K = K
         self.domains = []
 
 
