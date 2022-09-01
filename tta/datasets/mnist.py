@@ -15,7 +15,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         (0, 1, 0),
     ])
 
-    angles = [0]
+    angles = [0, 15]
 
     environments = [0.9, 0.8, 0.1]
 
@@ -47,8 +47,8 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         original_labels = original_labels[shuffle]
 
         # joint distribution of Y and Z
-        confounder1 = np.array([[1, 0], [0, 1]])
-        confounder2 = np.array([[0, 1], [1, 0]])
+        confounder1 = np.array([[0.5, 0.5, 0.0, 0.0], [0.0, 0.0, 0.5, 0.5]])
+        confounder2 = np.array([[0.0, 0.0, 0.5, 0.5], [0.5, 0.5, 0.0, 0.0]])
 
         for i, strength in enumerate(self.environments):
             images = original_images[i::len(self.environments)]
