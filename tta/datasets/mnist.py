@@ -15,14 +15,14 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         (0, 1, 0),
     ])
 
-    angles = [0, 15]
+    angles = [0]
 
     environments = [0.9, 0.8, 0.1]
 
     def __init__(self, root, generator):
         input_shape = (1, 28, 28, 3)
         self.Z = torch.LongTensor([(c_idx, r_idx) for c_idx in range(len(self.colors)) for r_idx in range(len(self.angles))])
-        C = 10
+        C = 2
         K = len(self.Z)
         super().__init__(input_shape, C, K)
 
@@ -39,6 +39,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
         original_labels = torch.cat((original_dataset_tr.targets,
                                      original_dataset_te.targets))
+        original_labels = (original_labels < 5).long()
 
         shuffle = torch.randperm(len(original_images), generator=generator)
 
@@ -46,17 +47,8 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         original_labels = original_labels[shuffle]
 
         # joint distribution of Y and Z
-        independent = np.ones((C, K)) * 1/K
-
-        confounder1 = np.zeros((C, K))
-        idx = torch.randint(0, K, (C,), generator=self.generator)
-        confounder1[torch.arange(C), idx] = 1
-        confounder1 = 0.999 * confounder1 + 0.001 * independent
-
-        confounder2 = np.zeros((C, K))
-        idx = torch.randint(0, K, (C,), generator=self.generator)
-        confounder2[torch.arange(C), idx] = 1
-        confounder2 = 0.999 * confounder2 + 0.001 * independent
+        confounder1 = np.array([[1, 0], [0, 1]])
+        confounder2 = np.array([[0, 1], [1, 0]])
 
         for i, strength in enumerate(self.environments):
             images = original_images[i::len(self.environments)]
@@ -78,12 +70,12 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
         # inject noise to Y
         weights = torch.ones((N, self.C))
-        weights[torch.arange(N), labels] += 80
+        weights[torch.arange(N), labels] += 2
         y = torch.multinomial(weights, 1, generator=self.generator).squeeze(dim=-1)
 
         # generate Z condition on Y
         values = torch.rand((N, 1), generator=self.generator)
-        z_idx = torch.searchsorted(lookup_table[labels], values).squeeze(dim=-1)
+        z_idx = torch.searchsorted(lookup_table[y], values).squeeze(dim=-1)
         z = self.Z[z_idx]
         z_flattened = len(self.angles) * z[:, 0] + z[:, 1]
 
