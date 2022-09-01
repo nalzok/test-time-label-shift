@@ -4,7 +4,7 @@ run:
 	pipenv run python3 \
 		-m tta.cli \
 		--dataset_name MNIST \
-		--train_domains 0,1 \
+		--train_domains 0 \
 		--train_batch_size 64 \
 		--train_fraction 0.8 \
 		--train_steps 1000 \
