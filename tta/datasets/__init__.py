@@ -3,6 +3,7 @@
 from typing import Set, Tuple, List
 
 import numpy as np
+import torch
 from torch.utils.data import ConcatDataset
 
 from ..utils import Dataset, split_dataset
@@ -12,15 +13,15 @@ class MultipleDomainDataset:
     def __init__(self, input_shape, C, K) -> None:
         super().__init__()
 
-        self.input_shape = input_shape
-        self.C = C
-        self.K = K
-        self.domains = []
+        self.input_shape: Tuple[int] = input_shape
+        self.C: int = C
+        self.K: int = K
+        self.domains: List[Tuple[torch.Tensor, Dataset]] = []
 
 
 def split(dataset: MultipleDomainDataset, train_domains: Set[int],
           train_fraction: float, calibration_fraction: float,
-          rng: np.random.Generator) -> Tuple[ConcatDataset, ConcatDataset, List[Dataset]]:
+          rng: np.random.Generator) -> Tuple[ConcatDataset, ConcatDataset, List[Tuple[torch.Tensor, Dataset]]]:
     train_splits = []
     calibrate_splits = []
     test_splits = []

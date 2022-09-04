@@ -8,7 +8,7 @@ from flax.training import train_state
 from flax.struct import field
 import optax
 
-from .models import AdaptiveResNet18
+from .models import AdaptiveResNet
 
 
 class TrainState(train_state.TrainState):
@@ -18,8 +18,8 @@ class TrainState(train_state.TrainState):
     prior: flax.core.FrozenDict[str, jnp.ndarray]
 
 
-def create_train_state(key: Any, C: int, K: int, T: float, learning_rate: float, specimen: jnp.ndarray) -> TrainState:
-    net = AdaptiveResNet18(C=C, K=K, T=T)
+def create_train_state(key: Any, C: int, K: int, T: float, num_layers: int, learning_rate: float, specimen: jnp.ndarray) -> TrainState:
+    net = AdaptiveResNet(C=C, K=K, T=T, num_layers=num_layers)
 
     variables = net.init(key, specimen, True)
     variables, params = variables.pop('params')
@@ -111,24 +111,33 @@ def induce_step(state: TrainState, X: jnp.ndarray) -> jnp.ndarray:
 
 
 # Adding donate_argnums=(0,) causes JAX to stuck. Maybe a bug?
-@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(2, 3, 4))
-def adapt_step(state: TrainState, X: jnp.ndarray, C: int, K: int, fix_marginal: bool) -> TrainState:
+@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(2, 3, 4, 5, 6))
+def adapt_step(state: TrainState, X: jnp.ndarray, C: int, K: int,
+        symmetric_dirichlet: bool, pseudocount_factor: float, fix_marginal: bool) -> TrainState:
+    M = C * K
+    source_prior = state.prior['source']
+    if symmetric_dirichlet:
+        alpha = pseudocount_factor * jnp.ones(M)/M
+    else:
+        alpha = pseudocount_factor * source_prior
+
     variables = {
         'params': state.params,
         'batch_stats': state.batch_stats,
         'prior': state.prior
     }
     source_likelihood = state.calibrated_fn(variables, X, False)
-    source_prior = state.prior['source']
 
-    init_val = (-1.0, 0.0, source_prior)
+    init_target_prior = source_prior
+    init_objective = jnp.sum((alpha - 1) * jnp.log(source_prior))
+    init_val = (init_target_prior, init_objective, init_objective - 1)
 
     def cond_fun(val):
-        prev_objective, objective,  _ = val
-        return objective - prev_objective > 0
+        _, objective, prev_objective = val
+        return objective > prev_objective
 
     def body_fun(val):
-        _, prev_objective, target_prior = val
+        target_prior, prev_objective, _ = val
 
         # E step
         target_likelihood = target_prior * source_likelihood / source_prior
@@ -136,15 +145,20 @@ def adapt_step(state: TrainState, X: jnp.ndarray, C: int, K: int, fix_marginal: 
         target_likelihood = target_likelihood / normalizer
 
         # M step
-        target_prior = jax.lax.pmean(jnp.mean(target_likelihood, axis=0), axis_name='batch')
+        target_likelihood_count = jax.lax.psum(jnp.sum(target_likelihood, axis=0), axis_name='batch')
+        target_prior_raw = target_likelihood_count + M * (alpha - 1)
+        target_prior = target_prior_raw / jnp.sum(target_prior_raw)
 
+        # Objective
         log_w = jnp.log(target_prior) - jnp.log(source_prior)
-        objective_i = jax.nn.logsumexp(log_w, axis=-1, b=source_likelihood)
-        objective = jax.lax.psum(jnp.sum(objective_i), axis_name='batch')
+        mle_objective_i = jax.nn.logsumexp(log_w, axis=-1, b=source_likelihood)
+        mle_objective = jax.lax.psum(jnp.sum(mle_objective_i), axis_name='batch')
+        regularizer = jnp.sum((alpha - 1) * jnp.log(target_prior))
+        objective = mle_objective + regularizer
 
-        return prev_objective, objective, target_prior
+        return target_prior, objective, prev_objective
 
-    _, _, target_prior = jax.lax.while_loop(cond_fun, body_fun, init_val)
+    target_prior, _, _ = jax.lax.while_loop(cond_fun, body_fun, init_val)
 
     if fix_marginal:
         # Make sure the marginal distribution of Y does not change

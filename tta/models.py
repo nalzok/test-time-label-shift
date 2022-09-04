@@ -2,17 +2,18 @@ import jax
 import jax.numpy as jnp
 from flax import linen as nn
 
-from .resnet import ResNet18
+from .resnet import ResNet
 
 
-class AdaptiveResNet18(nn.Module):
+class AdaptiveResNet(nn.Module):
+    num_layers: int
     C: int
     K: int
     T: float
 
     def setup(self):
         self.M = self.C * self.K
-        self.resnet = ResNet18(num_classes=self.M)
+        self.resnet = ResNet(num_outputs=self.M, num_layers=self.num_layers)
         self.b = self.param('b', jax.nn.initializers.zeros, (self.M,))
         self.source_prior = self.variable('prior', 'source',
                                           jax.nn.initializers.constant(1/self.M,),

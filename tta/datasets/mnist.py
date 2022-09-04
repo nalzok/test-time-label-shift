@@ -17,7 +17,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
     angles = [0, 15]
 
-    environments = [0.9, 0.8, 0.1]
+    environments = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
     def __init__(self, root, generator):
         input_shape = (1, 28, 28, 3)
@@ -53,18 +53,18 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         for i, strength in enumerate(self.environments):
             images = original_images[i::len(self.environments)]
             labels = original_labels[i::len(self.environments)]
-            marginal = torch.from_numpy(strength * confounder1 + (1-strength) * confounder2)
-            domain = self.shift(images, labels, marginal)
+            conditional = torch.from_numpy(strength * confounder1 + (1-strength) * confounder2)
+            domain = self.shift(images, labels, conditional)
 
-            joint = torch.zeros_like(marginal)
+            joint = torch.zeros_like(conditional)
             for label in labels:
-                joint[label] += marginal[label]
+                joint[label] += conditional[label]
             joint /= len(labels)
             self.domains.append((joint, domain))
 
 
-    def shift(self, images, labels, marginal):
-        lookup_table = torch.cumsum(marginal, dim=1)
+    def shift(self, images, labels, conditional):
+        lookup_table = torch.cumsum(conditional, dim=1)
         to_tensor = T.ToTensor()
         N = labels.size(0)
 
