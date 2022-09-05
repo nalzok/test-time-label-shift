@@ -288,4 +288,8 @@ tags
 
 data/**
 jit_cache/**
-logs/**
+joblog.txt
+logs/**.txt
+plots/**.png
+accuracy/**.npz
+norm/**.npz

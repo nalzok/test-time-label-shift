@@ -44,6 +44,7 @@ class AdaptiveResNet(nn.Module):
 
         # adaptation
         w = self.target_prior.value / self.source_prior.value
+        w = jnp.where(jnp.isnan(w), jnp.ones_like(w), w)    # in case target_prior is NaN
         source_likelihood = w * source_likelihood
         source_likelihood = source_likelihood.reshape((-1, self.C, self.K))
         source_likelihood = jnp.sum(source_likelihood, axis=-1)

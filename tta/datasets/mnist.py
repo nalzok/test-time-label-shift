@@ -19,12 +19,14 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
     environments = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
-    def __init__(self, root, generator):
+    def __init__(self, train_domains, root, generator):
         input_shape = (1, 28, 28, 3)
         self.Z = torch.LongTensor([(c_idx, r_idx) for c_idx in range(len(self.colors)) for r_idx in range(len(self.angles))])
         C = 2
         K = len(self.Z)
         super().__init__(input_shape, C, K)
+
+        self.train_domains = train_domains
 
         if root is None:
             raise ValueError('Data directory not specified!')
@@ -51,8 +53,9 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         confounder2 = np.array([[0.0, 0.0, 0.5, 0.5], [0.5, 0.5, 0.0, 0.0]])
 
         for i, strength in enumerate(self.environments):
-            images = original_images[i::len(self.environments)]
-            labels = original_labels[i::len(self.environments)]
+            offset = 0 if i in train_domains else 1
+            images = original_images[offset::2]
+            labels = original_labels[offset::2]
             conditional = torch.from_numpy(strength * confounder1 + (1-strength) * confounder2)
             domain = self.shift(images, labels, conditional)
 

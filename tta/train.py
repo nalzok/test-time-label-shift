@@ -110,16 +110,16 @@ def induce_step(state: TrainState, X: jnp.ndarray) -> jnp.ndarray:
     return source_likelihood
 
 
-# Adding donate_argnums=(0,) causes JAX to stuck. Maybe a bug?
-@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(2, 3, 4, 5, 6))
+@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(2, 3, 4, 6), donate_argnums=(0,))
 def adapt_step(state: TrainState, X: jnp.ndarray, C: int, K: int,
-        symmetric_dirichlet: bool, pseudocount_factor: float, fix_marginal: bool) -> TrainState:
+        symmetric_dirichlet: bool, prior_strength: float, fix_marginal: bool) -> TrainState:
     M = C * K
     source_prior = state.prior['source']
     if symmetric_dirichlet:
-        alpha = pseudocount_factor * jnp.ones(M)/M
+        alpha = jnp.ones(M)
     else:
-        alpha = pseudocount_factor * source_prior
+        alpha = source_prior * M
+    alpha = prior_strength * alpha
 
     variables = {
         'params': state.params,
@@ -130,7 +130,7 @@ def adapt_step(state: TrainState, X: jnp.ndarray, C: int, K: int,
 
     init_target_prior = source_prior
     init_objective = jnp.sum((alpha - 1) * jnp.log(source_prior))
-    init_val = (init_target_prior, init_objective, init_objective - 1)
+    init_val = init_target_prior, init_objective, init_objective - 1
 
     def cond_fun(val):
         _, objective, prev_objective = val
@@ -146,7 +146,7 @@ def adapt_step(state: TrainState, X: jnp.ndarray, C: int, K: int,
 
         # M step
         target_likelihood_count = jax.lax.psum(jnp.sum(target_likelihood, axis=0), axis_name='batch')
-        target_prior_raw = target_likelihood_count + M * (alpha - 1)
+        target_prior_raw = target_likelihood_count + (alpha - 1)    # add pseudocount
         target_prior = target_prior_raw / jnp.sum(target_prior_raw)
 
         # Objective

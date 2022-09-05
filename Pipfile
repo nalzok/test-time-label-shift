@@ -10,8 +10,14 @@ flax = "*"
 torch = "==1.12.0"
 torch-xla = {file = "https://storage.googleapis.com/tpu-pytorch/wheels/tpuvm/torch_xla-1.12-cp38-cp38-linux_x86_64.whl", extras = ["tpuvm"]}
 torchvision = "*"
+torch-sparse = {file = "https://data.pyg.org/whl/torch-1.11.0%2Bcpu/torch_sparse-0.6.13-cp38-cp38-linux_x86_64.whl"}
+torch-scatter = {file = "https://data.pyg.org/whl/torch-1.11.0%2Bcpu/torch_scatter-2.0.9-cp38-cp38-linux_x86_64.whl"}
+torch-geometric = "*"
 click = "*"
 pycocotools = "*"
+matplotlib = "*"
+wilds = "==2.0.0"
+
 
 [dev-packages]
 

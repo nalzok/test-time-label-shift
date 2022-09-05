@@ -1,4 +1,4 @@
-from typing import Any, Sequence, List, Tuple, Set, Dict
+from typing import Any, Sequence, List, Tuple, Set, Dict, Optional
 from pathlib import Path
 import sys
 import random
@@ -14,6 +14,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 import click
+import matplotlib.pyplot as plt
 
 from .datasets import split
 from .datasets.mnist import MultipleDomainMNIST
@@ -32,6 +33,9 @@ from .train import (
 from .utils import Tee
 
 
+Curves = Dict[Tuple[str, Tuple[Optional[int], Optional[bool], Optional[float], Optional[bool]]], jnp.ndarray]
+
+
 @click.command()
 @click.option('--dataset_name', type=click.Choice(['MNIST', 'COCO']), required=True)
 @click.option('--train_domains', type=str, required=True)
@@ -48,24 +52,28 @@ from .utils import Tee
 @click.option('--calibration_multiplier', type=float, required=True)
 @click.option('--test_batch_size', type=int, required=True, multiple=True)
 @click.option('--test_symmetric_dirichlet', type=bool, required=True, multiple=True)
-@click.option('--test_pseudocount_factor', type=float, required=True, multiple=True)
+@click.option('--test_prior_strength', type=float, required=True, multiple=True)
 @click.option('--test_fix_marginal', type=bool, required=True, multiple=True)
 @click.option('--seed', type=int, required=True)
 @click.option('--num_workers', type=int, required=True)
-@click.option('--log_dir', type=click.Path(path_type=Path), required=True)
+@click.option('--log_path', type=click.Path(path_type=Path), required=True)
+@click.option('--plot_path', type=click.Path(path_type=Path), required=True)
+@click.option('--accuracy_path', type=click.Path(path_type=Path), required=True)
+@click.option('--norm_path', type=click.Path(path_type=Path), required=True)
 def cli(dataset_name: str, train_domains: str,
         train_batch_size: int, train_fraction: float, train_num_layers: int, train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
         test_batch_size: Sequence[int], test_symmetric_dirichlet: Sequence[bool],
-        test_pseudocount_factor: Sequence[float], test_fix_marginal: Sequence[bool],
-        seed: int, num_workers: int, log_dir: Path) -> None:
+        test_prior_strength: Sequence[float], test_fix_marginal: Sequence[bool],
+        seed: int, num_workers: int, log_path: Path, plot_path: Path,
+        accuracy_path: Path, norm_path: Path) -> None:
     main(dataset_name, train_domains,
             train_batch_size, train_fraction, train_num_layers, train_steps, train_lr,
             source_prior_estimation, calibration_batch_size, calibration_fraction,
             calibration_temperature, calibration_steps, calibration_multiplier,
-            test_batch_size, test_symmetric_dirichlet, test_pseudocount_factor, test_fix_marginal,
-            seed, num_workers, log_dir)
+            test_batch_size, test_symmetric_dirichlet, test_prior_strength, test_fix_marginal,
+            seed, num_workers, log_path, plot_path, accuracy_path, norm_path)
 
 
 def main(dataset_name: str, train_domains: str,
@@ -73,11 +81,14 @@ def main(dataset_name: str, train_domains: str,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
         test_batch_size: Sequence[int], test_symmetric_dirichlet: Sequence[bool],
-        test_pseudocount_factor: Sequence[float], test_fix_marginal: Sequence[bool],
-        seed: int, num_workers: int, log_dir: Path) -> Dict:
-    log_dir.mkdir(parents=True, exist_ok=True)
-    sys.stdout = Tee(log_dir / 'out.txt')
-    sys.stderr = Tee(log_dir / 'err.txt')
+        test_prior_strength: Sequence[float], test_fix_marginal: Sequence[bool],
+        seed: int, num_workers: int, log_path: Path, plot_path: Path,
+        accuracy_path: Path, norm_path: Path) -> Tuple[Curves, Curves]:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    plot_path.parent.mkdir(parents=True, exist_ok=True)
+    accuracy_path.parent.mkdir(parents=True, exist_ok=True)
+    norm_path.parent.mkdir(parents=True, exist_ok=True)
+    sys.stdout = Tee(log_path)
 
     device_count = jax.local_device_count()
     assert train_batch_size % device_count == 0, f'train_batch_size should be divisible by {device_count}'
@@ -93,24 +104,55 @@ def main(dataset_name: str, train_domains: str,
     generator = torch.Generator().manual_seed(seed)
 
     train_domains_set = set(int(env) for env in train_domains.split(','))
+    if len(train_domains_set) != 1:
+        raise NotImplementedError('Training on multiple source distributions is not supported yet.')
 
-    state, C, K, test_splits, unadapted_accuracy_curve, unadapted_norm_curve = train(dataset_name, train_domains_set,
+    state, C, K, environments, test_splits, unadapted_accuracy_curve, unadapted_norm_curve = train(dataset_name, train_domains_set,
             train_batch_size, train_fraction, train_num_layers, train_steps, train_lr,
             source_prior_estimation, calibration_batch_size, calibration_fraction,
             calibration_temperature, calibration_steps, calibration_multiplier,
             device_count, key, rng, generator, num_workers)
-    results = {None: (unadapted_accuracy_curve, unadapted_norm_curve)}
+    accuracy_curves: Curves = {('Unadapted', (None, None, None, None)): unadapted_accuracy_curve}
+    norm_curves: Curves = {('Unadapted', (None, None, None, None)): unadapted_norm_curve}
 
-    for batch_size, symmetric_dirichlet, pseudocount_factor, fix_marginal \
-            in product(test_batch_size, test_symmetric_dirichlet, test_pseudocount_factor, test_fix_marginal):
-        accuracy_curve, norm_curve = test(state, C, K, train_domains_set, test_splits,
-                batch_size, symmetric_dirichlet, pseudocount_factor, fix_marginal,
+    for batch_size, symmetric_dirichlet, prior_strength, fix_marginal \
+            in product(test_batch_size, test_symmetric_dirichlet, test_prior_strength, test_fix_marginal):
+        label = f'{batch_size=}, {symmetric_dirichlet=}, {prior_strength=}, {fix_marginal=}'
+        state, accuracy_curve, norm_curve = adapt(state, C, K, train_domains_set, test_splits,
+                batch_size, symmetric_dirichlet, prior_strength, fix_marginal, label,
                 device_count, generator, num_workers)
-        results[batch_size, symmetric_dirichlet, pseudocount_factor, fix_marginal] = accuracy_curve, norm_curve
+        key = label, (batch_size, symmetric_dirichlet, prior_strength, fix_marginal)
+        accuracy_curves[key] = accuracy_curve
+        norm_curves[key] = norm_curve
 
-    pprint(results)
+    print('===> accuracy_curves')
+    pprint(accuracy_curves)
+    print('===> norm_curves')
+    pprint(norm_curves)
 
-    return results
+    jnp.savez(accuracy_path, **{k: v for (k, _), v in accuracy_curves.items()})
+    jnp.savez(norm_path, **{k: v for (k, _), v in norm_curves.items()})
+
+    _, ax = plt.subplots(figsize=(12, 6))
+
+    accuracy_curve = accuracy_curves.pop(('Unadapted', (None, None, None, None)))
+    ax.plot(environments, accuracy_curve, label='Unadapted')
+
+    for (label, (batch_size, symmetric_dirichlet, prior_strength, fix_marginal)), accuracy_curve in accuracy_curves.items():
+        ax.plot(environments, accuracy_curve,
+                linestyle='-' if symmetric_dirichlet else '--',
+                label=label)
+
+    for i in train_domains_set:
+        ax.axvline(environments[i], linestyle=':')
+
+    plt.ylim((0, 1))
+    plt.grid()
+
+    plt.legend()
+    plt.savefig(plot_path)
+
+    return accuracy_curves, norm_curves
 
 
 def train(dataset_name: str, train_domains_set: Set[int],
@@ -118,10 +160,10 @@ def train(dataset_name: str, train_domains_set: Set[int],
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
         device_count: int, key: Any, rng: np.random.Generator, generator: torch.Generator, num_workers: int) \
-                -> Tuple[TrainState, int, int, List[Tuple[torch.Tensor, Dataset]], jnp.ndarray, jnp.ndarray]:
+                -> Tuple[TrainState, int, int, Sequence[float], List[Tuple[torch.Tensor, Dataset]], jnp.ndarray, jnp.ndarray]:
     if dataset_name == 'MNIST':
         root = Path('data/')
-        dataset = MultipleDomainMNIST(root, generator)
+        dataset = MultipleDomainMNIST(train_domains_set, root, generator)
     elif dataset_name == 'COCO':
         root = Path('data/COCO/train2017')
         annFile = Path('data/COCO/annotations/instances_train2017.json')
@@ -134,7 +176,8 @@ def train(dataset_name: str, train_domains_set: Set[int],
     train, calibration, test_splits = split(dataset, train_domains_set, train_fraction, calibration_fraction, rng)
     print('train', len(train))
     print('calibration', len(calibration))
-    print('test_splits[0][1]', len(test_splits[0][1]))
+    train_domain = next(iter(train_domains_set))
+    print(f'test_splits[{train_domain}][1]', len(test_splits[train_domain][1]))
 
     key_init, key = jax.random.split(key)
     specimen = jnp.empty(dataset.input_shape)
@@ -191,7 +234,8 @@ def train(dataset_name: str, train_domains_set: Set[int],
 
     print('===> Adapting & Evaluating')
 
-    print('---> Unadapted')
+    label = 'Unadapted'
+    print(f'---> {label}')
     prior = state.prior.unfreeze()
     prior['target'] = prior['source']
     state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
@@ -199,7 +243,7 @@ def train(dataset_name: str, train_domains_set: Set[int],
     accuracy_curve = jnp.empty(len(test_splits))
     norm_curve = jnp.empty(len(test_splits))
     for i, (joint, test) in enumerate(test_splits):
-        seen = '  seen' if i in train_domains_set else 'unseen'
+        seen = '  (seen)' if i in train_domains_set else '(unseen)'
 
         hits = norm = 0
         joint = jnp.array(joint)
@@ -224,21 +268,25 @@ def train(dataset_name: str, train_domains_set: Set[int],
         norm_curve = norm_curve.at[i].set(norm)
 
         with jnp.printoptions(precision=4):
-            print(f'Environment {i:>2} ({seen}) Accuracy {accuracy}, Norm {norm}')
+            print(f'[{label}] Environment {i:>2} {seen} Accuracy {accuracy}, Norm {norm}')
 
-    return state, C, K, test_splits, accuracy_curve, norm_curve
+    print(f'[{label}] Average Accuracy {jnp.mean(accuracy_curve)}, Norm {jnp.mean(norm_curve)}')
+
+    return state, C, K, dataset.environments, test_splits, accuracy_curve, norm_curve
 
 
-def test(state: TrainState, C: int, K: int, train_domains_set: Set[int],
+def adapt(state: TrainState, C: int, K: int, train_domains_set: Set[int],
         test_splits: Sequence[Tuple[torch.Tensor, Dataset]],
-        batch_size: int, symmetric_dirichlet: bool, pseudocount_factor: float, fix_marginal: bool,
-        device_count: int, generator: torch.Generator, num_workers: int) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        batch_size: int, symmetric_dirichlet: bool, prior_strength: float, fix_marginal: bool, label: str,
+        device_count: int, generator: torch.Generator, num_workers: int) -> Tuple[TrainState, jnp.ndarray, jnp.ndarray]:
 
-    print(f'---> {batch_size=}, {symmetric_dirichlet=}, {pseudocount_factor=}, {fix_marginal=}')
+    print(f'---> {label}')
+    prior_strength = replicate(prior_strength)
+
     accuracy_curve = jnp.empty(len(test_splits))
     norm_curve = jnp.empty(len(test_splits))
     for i, (joint, test) in enumerate(test_splits):
-        seen = '  seen' if i in train_domains_set else 'unseen'
+        seen = '  (seen)' if i in train_domains_set else '(unseen)'
 
         hits = norm = 0
         joint = jnp.array(joint)
@@ -253,7 +301,7 @@ def test(state: TrainState, C: int, K: int, train_domains_set: Set[int],
             Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
 
             # Adaptation
-            state = adapt_step(state, X, C, K, symmetric_dirichlet, pseudocount_factor, fix_marginal)
+            state = adapt_step(state, X, C, K, symmetric_dirichlet, prior_strength, fix_marginal)
 
             hits += unreplicate(test_step(state, X, Y))
             prior = unreplicate(state.prior['target']).reshape((C, K))
@@ -265,9 +313,11 @@ def test(state: TrainState, C: int, K: int, train_domains_set: Set[int],
         norm_curve = norm_curve.at[i].set(norm)
 
         with jnp.printoptions(precision=4):
-            print(f'Environment {i:>2} ({seen}) Accuracy {accuracy}, Norm {norm}')
+            print(f'[{label}] Environment {i:>2} {seen} Accuracy {accuracy}, Norm {norm}')
 
-    return accuracy_curve, norm_curve
+    print(f'[{label}] Average Accuracy {jnp.mean(accuracy_curve)}, Norm {jnp.mean(norm_curve)}')
+
+    return state, accuracy_curve, norm_curve
 
 
 def estimate_source_prior(train: Dataset, train_batch_size: int, num_workers: int, generator: torch.Generator,
