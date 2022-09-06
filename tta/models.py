@@ -34,8 +34,7 @@ class AdaptiveResNet(nn.Module):
         logits = jax.lax.stop_gradient(logits)
 
         # bias corrected temperature scaling
-        source_likelihood = jnp.exp(logits/self.T + self.b)
-        source_likelihood = source_likelihood / jnp.sum(source_likelihood, axis=-1, keepdims=True)
+        source_likelihood = jax.nn.softmax(logits/self.T + self.b)
 
         return source_likelihood
 
