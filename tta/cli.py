@@ -200,17 +200,18 @@ def train(dataset_name: str, train_domains_set: Set[int],
 
 
     print('===> Calibrating')
-    inf_calibration_loader = InfiniteDataLoader(calibration, calibration_batch_size, num_workers, generator)
-    for step, (X, Y, Z) in enumerate(islice(inf_calibration_loader, calibration_steps)):
-        X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
-        Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
-        Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
-        M = Y * K + Z
+    if len(calibration) or calibration_steps:
+        inf_calibration_loader = InfiniteDataLoader(calibration, calibration_batch_size, num_workers, generator)
+        for step, (X, Y, Z) in enumerate(islice(inf_calibration_loader, calibration_steps)):
+            X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
+            Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
+            Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
+            M = Y * K + Z
 
-        state, loss = calibration_step(state, X, M, calibration_multiplier)
-        if step % (calibration_steps // 20 + 1) == 0:
-            with jnp.printoptions(precision=3):
-                print(f'Calibration step {step + 1}, loss: {unreplicate(loss)}')
+            state, loss = calibration_step(state, X, M, calibration_multiplier)
+            if step % (calibration_steps // 20 + 1) == 0:
+                with jnp.printoptions(precision=3):
+                    print(f'Calibration step {step + 1}, loss: {unreplicate(loss)}')
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
@@ -243,10 +244,17 @@ def train(dataset_name: str, train_domains_set: Set[int],
     accuracy_curve = jnp.empty(len(test_splits))
     norm_curve = jnp.empty(len(test_splits))
     for i, (joint, test) in enumerate(test_splits):
+        # happens on the source domain when train_fraction = 1
+        if len(test) == 0:
+            accuracy_curve = accuracy_curve.at[i].set(jnp.nan)
+            norm_curve = norm_curve.at[i].set(jnp.nan)
+            continue
+
         seen = '  (seen)' if i in train_domains_set else '(unseen)'
 
         hits = norm = 0
         joint = jnp.array(joint)
+
         # batch size should not matter since we are not doing adaptation
         test_loader = FastDataLoader(test, train_batch_size, num_workers, generator)
         for X, Y, _ in test_loader:
@@ -270,7 +278,7 @@ def train(dataset_name: str, train_domains_set: Set[int],
         with jnp.printoptions(precision=4):
             print(f'[{label}] Environment {i:>2} {seen} Accuracy {accuracy}, Norm {norm}')
 
-    print(f'[{label}] Average Accuracy {jnp.mean(accuracy_curve)}, Norm {jnp.mean(norm_curve)}')
+    print(f'[{label}] Average Accuracy {jnp.nanmean(accuracy_curve)}, Norm {jnp.nanmean(norm_curve)}')
 
     return state, C, K, dataset.environments, test_splits, accuracy_curve, norm_curve
 
@@ -286,6 +294,12 @@ def adapt(state: TrainState, C: int, K: int, train_domains_set: Set[int],
     accuracy_curve = jnp.empty(len(test_splits))
     norm_curve = jnp.empty(len(test_splits))
     for i, (joint, test) in enumerate(test_splits):
+        # happens on the source domain when train_fraction = 1
+        if len(test) == 0:
+            accuracy_curve = accuracy_curve.at[i].set(jnp.nan)
+            norm_curve = norm_curve.at[i].set(jnp.nan)
+            continue
+
         seen = '  (seen)' if i in train_domains_set else '(unseen)'
 
         hits = norm = 0
@@ -315,7 +329,7 @@ def adapt(state: TrainState, C: int, K: int, train_domains_set: Set[int],
         with jnp.printoptions(precision=4):
             print(f'[{label}] Environment {i:>2} {seen} Accuracy {accuracy}, Norm {norm}')
 
-    print(f'[{label}] Average Accuracy {jnp.mean(accuracy_curve)}, Norm {jnp.mean(norm_curve)}')
+    print(f'[{label}] Average Accuracy {jnp.nanmean(accuracy_curve)}, Norm {jnp.nanmean(norm_curve)}')
 
     return state, accuracy_curve, norm_curve
 

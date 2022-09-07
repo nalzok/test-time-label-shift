@@ -17,7 +17,7 @@ click = "*"
 pycocotools = "*"
 matplotlib = "*"
 wilds = "==2.0.0"
-
+tensorflow-cpu = "*"
 
 [dev-packages]
 

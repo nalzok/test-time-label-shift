@@ -6,15 +6,15 @@ debug:
 		--dataset_name MNIST \
 		--train_domains 2 \
 		--train_batch_size 512 \
-		--train_fraction 0.8 \
+		--train_fraction 1.0 \
 		--train_num_layers 18 \
 		--train_steps 1000 \
 		--train_lr 1e-2 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 64 \
-		--calibration_fraction 0.1 \
+		--calibration_fraction 0.0 \
 		--calibration_temperature 1 \
-		--calibration_steps 200 \
+		--calibration_steps 0 \
 		--calibration_multiplier 1 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
