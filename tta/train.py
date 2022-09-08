@@ -1,10 +1,12 @@
 from typing import Any, Callable, Tuple
 from functools import partial
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import flax
 from flax.training import train_state
+from flax.training.checkpoints import save_checkpoint, restore_checkpoint
 from flax.struct import field
 import optax
 
@@ -38,6 +40,13 @@ def create_train_state(key: Any, C: int, K: int, T: float, num_layers: int, lear
             prior=prior,
     )
 
+    return state
+
+
+def restore_train_state(state: TrainState, checkpoint_path: Path) -> TrainState:
+    # pretrained = restore_checkpoint(checkpoint_path, None)
+    # save_checkpoint('/tmp', state, 0)
+    # print(jax.tree_util.tree_structure(state))
     return state
 
 

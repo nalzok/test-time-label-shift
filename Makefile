@@ -3,13 +3,13 @@
 debug:
 	pipenv run python3 \
 		-m tta.cli \
-		--dataset_name MNIST \
-		--train_domains 2 \
-		--train_batch_size 512 \
+		--dataset_name Waterbirds \
+		--train_domains 0 \
+		--train_batch_size 128 \
 		--train_fraction 1.0 \
-		--train_num_layers 18 \
+		--train_num_layers 50 \
 		--train_steps 1000 \
-		--train_lr 1e-2 \
+		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 64 \
 		--calibration_fraction 0.0 \

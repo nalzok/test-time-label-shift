@@ -18,11 +18,13 @@ import matplotlib.pyplot as plt
 
 from .datasets import split
 from .datasets.mnist import MultipleDomainMNIST
+from .datasets.waterbirds import MultipleDomainWaterbirds
 from .datasets.coco import ColoredCOCO
 from .fast_data_loader import InfiniteDataLoader, FastDataLoader 
 from .train import (
     TrainState,
     create_train_state,
+    restore_train_state,
     train_step,
     calibration_step,
     cross_replica_mean,
@@ -37,11 +39,12 @@ Curves = Dict[Tuple[str, Tuple[Optional[int], Optional[bool], Optional[float], O
 
 
 @click.command()
-@click.option('--dataset_name', type=click.Choice(['MNIST', 'COCO']), required=True)
+@click.option('--dataset_name', type=click.Choice(['MNIST', 'COCO', 'Waterbirds']), required=True)
 @click.option('--train_domains', type=str, required=True)
 @click.option('--train_batch_size', type=int, required=True)
 @click.option('--train_fraction', type=float, required=True)
 @click.option('--train_num_layers', type=int, required=True)
+@click.option('--train_checkpoint_path', type=click.Path(path_type=Path), required=False)
 @click.option('--train_steps', type=int, required=True)
 @click.option('--train_lr', type=float, required=True)
 @click.option('--source_prior_estimation', type=click.Choice(['count', 'induce', 'average']), required=True)
@@ -61,7 +64,8 @@ Curves = Dict[Tuple[str, Tuple[Optional[int], Optional[bool], Optional[float], O
 @click.option('--accuracy_path', type=click.Path(path_type=Path), required=True)
 @click.option('--norm_path', type=click.Path(path_type=Path), required=True)
 def cli(dataset_name: str, train_domains: str,
-        train_batch_size: int, train_fraction: float, train_num_layers: int, train_steps: int, train_lr: float,
+        train_batch_size: int, train_fraction: float, train_num_layers: int,
+        train_checkpoint_path: Optional[Path], train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
         test_batch_size: Sequence[int], test_symmetric_dirichlet: Sequence[bool],
@@ -69,7 +73,7 @@ def cli(dataset_name: str, train_domains: str,
         seed: int, num_workers: int, log_path: Path, plot_path: Path,
         accuracy_path: Path, norm_path: Path) -> None:
     main(dataset_name, train_domains,
-            train_batch_size, train_fraction, train_num_layers, train_steps, train_lr,
+            train_batch_size, train_fraction, train_num_layers, train_checkpoint_path, train_steps, train_lr,
             source_prior_estimation, calibration_batch_size, calibration_fraction,
             calibration_temperature, calibration_steps, calibration_multiplier,
             test_batch_size, test_symmetric_dirichlet, test_prior_strength, test_fix_marginal,
@@ -77,7 +81,8 @@ def cli(dataset_name: str, train_domains: str,
 
 
 def main(dataset_name: str, train_domains: str,
-        train_batch_size: int, train_fraction: float, train_num_layers: int, train_steps: int, train_lr: float,
+        train_batch_size: int, train_fraction: float, train_num_layers: int,
+        train_checkpoint_path: Optional[Path], train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
         test_batch_size: Sequence[int], test_symmetric_dirichlet: Sequence[bool],
@@ -108,7 +113,7 @@ def main(dataset_name: str, train_domains: str,
         raise NotImplementedError('Training on multiple source distributions is not supported yet.')
 
     state, C, K, environments, test_splits, unadapted_accuracy_curve, unadapted_norm_curve = train(dataset_name, train_domains_set,
-            train_batch_size, train_fraction, train_num_layers, train_steps, train_lr,
+            train_batch_size, train_fraction, train_num_layers, train_checkpoint_path, train_steps, train_lr,
             source_prior_estimation, calibration_batch_size, calibration_fraction,
             calibration_temperature, calibration_steps, calibration_multiplier,
             device_count, key, rng, generator, num_workers)
@@ -156,7 +161,8 @@ def main(dataset_name: str, train_domains: str,
 
 
 def train(dataset_name: str, train_domains_set: Set[int],
-        train_batch_size: int, train_fraction: float, train_num_layers: int, train_steps: int, train_lr: float,
+        train_batch_size: int, train_fraction: float, train_num_layers: int,
+        train_checkpoint_path: Optional[Path], train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
         device_count: int, key: Any, rng: np.random.Generator, generator: torch.Generator, num_workers: int) \
@@ -168,6 +174,9 @@ def train(dataset_name: str, train_domains_set: Set[int],
         root = Path('data/COCO/train2017')
         annFile = Path('data/COCO/annotations/instances_train2017.json')
         dataset = ColoredCOCO(root, annFile, generator)
+    elif dataset_name == 'Waterbirds':
+        root = Path('data/')
+        dataset = MultipleDomainWaterbirds(train_domains_set, root, generator)
     else:
         raise ValueError(f'Unknown dataset {dataset_name}')
 
@@ -182,6 +191,8 @@ def train(dataset_name: str, train_domains_set: Set[int],
     key_init, key = jax.random.split(key)
     specimen = jnp.empty(dataset.input_shape)
     state = create_train_state(key_init, C, K, calibration_temperature, train_num_layers, train_lr, specimen)
+    if train_checkpoint_path is not None:
+        state = restore_train_state(state, train_checkpoint_path)
     state: TrainState = replicate(state)
 
 
