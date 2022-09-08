@@ -10,12 +10,13 @@ from ..utils import Dataset, split_dataset
 
 
 class MultipleDomainDataset:
-    def __init__(self, input_shape, C, K) -> None:
+    def __init__(self, input_shape, C, K, environments) -> None:
         super().__init__()
 
         self.input_shape: Tuple[int] = input_shape
         self.C: int = C
         self.K: int = K
+        self.environments: np.ndarray = environments
         self.domains: List[Tuple[torch.Tensor, Dataset]] = []
 
 

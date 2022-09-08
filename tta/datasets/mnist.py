@@ -10,21 +10,23 @@ from . import MultipleDomainDataset
 
 
 class MultipleDomainMNIST(MultipleDomainDataset):
-    colors = torch.ByteTensor([
-        (1, 0, 0),
-        (0, 1, 0),
-    ])
 
-    angles = [0, 15]
-
-    environments = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-
-    def __init__(self, train_domains, root, generator):
-        input_shape = (1, 28, 28, 3)
+    def __init__(self, root, generator, train_domains, apply_rotation):
+        self.colors = torch.ByteTensor([
+            (1, 0, 0),
+            (0, 1, 0),
+        ])
+        if apply_rotation:
+            self.angles = [0, 15]
+        else:
+            self.angles = [0]
         self.Z = torch.LongTensor([(c_idx, r_idx) for c_idx in range(len(self.colors)) for r_idx in range(len(self.angles))])
+
+        input_shape = (1, 28, 28, 3)
         C = 2
         K = len(self.Z)
-        super().__init__(input_shape, C, K)
+        environments = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+        super().__init__(input_shape, C, K, environments)
 
         self.train_domains = train_domains
 
@@ -49,8 +51,12 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         original_labels = original_labels[shuffle]
 
         # joint distribution of Y and Z
-        confounder1 = np.array([[0.5, 0.5, 0.0, 0.0], [0.0, 0.0, 0.5, 0.5]])
-        confounder2 = np.array([[0.0, 0.0, 0.5, 0.5], [0.5, 0.5, 0.0, 0.0]])
+        if apply_rotation:
+            confounder1 = np.array([[0.5, 0.5, 0.0, 0.0], [0.0, 0.0, 0.5, 0.5]])
+            confounder2 = np.array([[0.0, 0.0, 0.5, 0.5], [0.5, 0.5, 0.0, 0.0]])
+        else:
+            confounder1 = np.array([[1.0, 0.0], [0.0, 1.0]])
+            confounder2 = np.array([[0.0, 1.0], [1.0, 0.0]])
 
         for i, strength in enumerate(self.environments):
             offset = 0 if i in train_domains else 1

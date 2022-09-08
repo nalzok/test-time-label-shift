@@ -41,6 +41,7 @@ Curves = Dict[Tuple[str, Tuple[Optional[int], Optional[bool], Optional[float], O
 @click.command()
 @click.option('--dataset_name', type=click.Choice(['MNIST', 'COCO', 'Waterbirds']), required=True)
 @click.option('--train_domains', type=str, required=True)
+@click.option('--train_apply_rotation', type=bool, required=True)
 @click.option('--train_batch_size', type=int, required=True)
 @click.option('--train_fraction', type=float, required=True)
 @click.option('--train_num_layers', type=int, required=True)
@@ -57,37 +58,38 @@ Curves = Dict[Tuple[str, Tuple[Optional[int], Optional[bool], Optional[float], O
 @click.option('--test_symmetric_dirichlet', type=bool, required=True, multiple=True)
 @click.option('--test_prior_strength', type=float, required=True, multiple=True)
 @click.option('--test_fix_marginal', type=bool, required=True, multiple=True)
+@click.option('--plot_title', type=str, required=False, default='Accuracy on Each Domain')
 @click.option('--seed', type=int, required=True)
 @click.option('--num_workers', type=int, required=True)
 @click.option('--log_path', type=click.Path(path_type=Path), required=True)
 @click.option('--plot_path', type=click.Path(path_type=Path), required=True)
 @click.option('--accuracy_path', type=click.Path(path_type=Path), required=True)
 @click.option('--norm_path', type=click.Path(path_type=Path), required=True)
-def cli(dataset_name: str, train_domains: str,
+def cli(dataset_name: str, train_domains: str, train_apply_rotation: bool,
         train_batch_size: int, train_fraction: float, train_num_layers: int,
         train_checkpoint_path: Optional[Path], train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
         test_batch_size: Sequence[int], test_symmetric_dirichlet: Sequence[bool],
         test_prior_strength: Sequence[float], test_fix_marginal: Sequence[bool],
-        seed: int, num_workers: int, log_path: Path, plot_path: Path,
+        plot_title: str, seed: int, num_workers: int, log_path: Path, plot_path: Path,
         accuracy_path: Path, norm_path: Path) -> None:
-    main(dataset_name, train_domains,
+    main(dataset_name, train_domains, train_apply_rotation,
             train_batch_size, train_fraction, train_num_layers, train_checkpoint_path, train_steps, train_lr,
             source_prior_estimation, calibration_batch_size, calibration_fraction,
             calibration_temperature, calibration_steps, calibration_multiplier,
             test_batch_size, test_symmetric_dirichlet, test_prior_strength, test_fix_marginal,
-            seed, num_workers, log_path, plot_path, accuracy_path, norm_path)
+            plot_title, seed, num_workers, log_path, plot_path, accuracy_path, norm_path)
 
 
-def main(dataset_name: str, train_domains: str,
+def main(dataset_name: str, train_domains: str, train_apply_rotation: bool,
         train_batch_size: int, train_fraction: float, train_num_layers: int,
         train_checkpoint_path: Optional[Path], train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
         test_batch_size: Sequence[int], test_symmetric_dirichlet: Sequence[bool],
         test_prior_strength: Sequence[float], test_fix_marginal: Sequence[bool],
-        seed: int, num_workers: int, log_path: Path, plot_path: Path,
+        plot_title: str, seed: int, num_workers: int, log_path: Path, plot_path: Path,
         accuracy_path: Path, norm_path: Path) -> Tuple[Curves, Curves]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     plot_path.parent.mkdir(parents=True, exist_ok=True)
@@ -113,7 +115,7 @@ def main(dataset_name: str, train_domains: str,
         raise NotImplementedError('Training on multiple source distributions is not supported yet.')
 
     state, C, K, environments, test_splits, unadapted_accuracy_curve, unadapted_norm_curve = train(dataset_name, train_domains_set,
-            train_batch_size, train_fraction, train_num_layers, train_checkpoint_path, train_steps, train_lr,
+            train_apply_rotation, train_batch_size, train_fraction, train_num_layers, train_checkpoint_path, train_steps, train_lr,
             source_prior_estimation, calibration_batch_size, calibration_fraction,
             calibration_temperature, calibration_steps, calibration_multiplier,
             device_count, key, rng, generator, num_workers)
@@ -139,44 +141,47 @@ def main(dataset_name: str, train_domains: str,
     jnp.savez(norm_path, **{k: v for (k, _), v in norm_curves.items()})
 
     _, ax = plt.subplots(figsize=(12, 6))
+    upper_bound = np.maximum(np.maximum(1-environments, environments), 0.75 * np.ones_like(environments))
+    ax.plot(environments, upper_bound, linestyle=':', label='Upper bound')
 
     accuracy_curve = accuracy_curves.pop(('Unadapted', (None, None, None, None)))
-    ax.plot(environments, accuracy_curve, label='Unadapted')
+    ax.plot(environments, accuracy_curve, linestyle='--', label='Unadapted')
 
     for (label, (batch_size, symmetric_dirichlet, prior_strength, fix_marginal)), accuracy_curve in accuracy_curves.items():
-        ax.plot(environments, accuracy_curve,
-                linestyle='-' if symmetric_dirichlet else '--',
-                label=label)
+        ax.plot(environments, accuracy_curve, label=label)
 
     for i in train_domains_set:
         ax.axvline(environments[i], linestyle=':')
 
     plt.ylim((0, 1))
-    plt.grid()
-
+    plt.xlabel('Domain Parameter')
+    plt.ylabel('Accuracy')
+    plt.title(plot_title)
+    plt.grid(True)
     plt.legend()
+
     plt.savefig(plot_path)
 
     return accuracy_curves, norm_curves
 
 
-def train(dataset_name: str, train_domains_set: Set[int],
+def train(dataset_name: str, train_domains_set: Set[int], train_apply_rotation: bool,
         train_batch_size: int, train_fraction: float, train_num_layers: int,
         train_checkpoint_path: Optional[Path], train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
         device_count: int, key: Any, rng: np.random.Generator, generator: torch.Generator, num_workers: int) \
-                -> Tuple[TrainState, int, int, Sequence[float], List[Tuple[torch.Tensor, Dataset]], jnp.ndarray, jnp.ndarray]:
+                -> Tuple[TrainState, int, int, np.ndarray, List[Tuple[torch.Tensor, Dataset]], jnp.ndarray, jnp.ndarray]:
     if dataset_name == 'MNIST':
         root = Path('data/')
-        dataset = MultipleDomainMNIST(train_domains_set, root, generator)
+        dataset = MultipleDomainMNIST(root, generator, train_domains_set, train_apply_rotation)
     elif dataset_name == 'COCO':
         root = Path('data/COCO/train2017')
         annFile = Path('data/COCO/annotations/instances_train2017.json')
         dataset = ColoredCOCO(root, annFile, generator)
     elif dataset_name == 'Waterbirds':
         root = Path('data/')
-        dataset = MultipleDomainWaterbirds(train_domains_set, root, generator)
+        dataset = MultipleDomainWaterbirds(root, generator, train_domains_set)
     else:
         raise ValueError(f'Unknown dataset {dataset_name}')
 

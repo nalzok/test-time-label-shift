@@ -1,18 +1,19 @@
-.PHONY: debug sweep
+.PHONY: debug sweep figures
 
 debug:
 	pipenv run python3 \
 		-m tta.cli \
-		--dataset_name Waterbirds \
-		--train_domains 0 \
-		--train_batch_size 128 \
-		--train_fraction 1.0 \
-		--train_num_layers 50 \
+		--dataset_name MNIST \
+		--train_domains 9 \
+		--train_apply_rotation True \
+		--train_batch_size 64 \
+		--train_fraction 0.8 \
+		--train_num_layers 18 \
 		--train_steps 1000 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 64 \
-		--calibration_fraction 0.0 \
+		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
 		--calibration_steps 0 \
 		--calibration_multiplier 1 \
@@ -20,6 +21,7 @@ debug:
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
 		--test_prior_strength 1 \
+		--test_prior_strength 4 \
 		--test_fix_marginal True \
 		--seed 360234358 \
 		--num_workers 8 \
@@ -68,3 +70,180 @@ sweep:
 		::: 1e-2 1e-3 \
 		::: 0.1 1 10 \
 		::: 0 100 200
+
+
+figures:
+	pipenv run python3 \
+		-m tta.cli \
+		--dataset_name MNIST \
+		--train_domains 9 \
+		--train_apply_rotation True \
+		--train_batch_size 64 \
+		--train_fraction 0.8 \
+		--train_num_layers 18 \
+		--train_steps 1000 \
+		--train_lr 1e-3 \
+		--source_prior_estimation induce \
+		--calibration_batch_size 64 \
+		--calibration_fraction 0.1 \
+		--calibration_temperature 1 \
+		--calibration_steps 0 \
+		--calibration_multiplier 1 \
+		--test_batch_size 512 \
+		--test_symmetric_dirichlet False \
+		--test_symmetric_dirichlet True \
+		--test_prior_strength 1 \
+		--test_prior_strength 4 \
+		--test_fix_marginal True \
+		--plot_title '' \
+		--seed 360234358 \
+		--num_workers 8 \
+		--log_path logs/mnist-default.txt \
+		--plot_path plots/mnist-default.png \
+		--accuracy_path accuracy/mnist-default.npz \
+		--norm_path norm/mnist-default.npz
+	pipenv run python3 \
+		-m tta.cli \
+		--dataset_name MNIST \
+		--train_apply_rotation True \
+		--train_domains 9 \
+		--train_batch_size 64 \
+		--train_fraction 0.8 \
+		--train_num_layers 18 \
+		--train_steps 1000 \
+		--train_lr 1e-3 \
+		--source_prior_estimation induce \
+		--calibration_batch_size 64 \
+		--calibration_fraction 0.1 \
+		--calibration_temperature 1 \
+		--calibration_steps 10 \
+		--calibration_multiplier 1 \
+		--test_batch_size 64 \
+		--test_symmetric_dirichlet False \
+		--test_symmetric_dirichlet True \
+		--test_prior_strength 1 \
+		--test_prior_strength 4 \
+		--test_fix_marginal True \
+		--plot_title '' \
+		--seed 360234358 \
+		--num_workers 8 \
+		--log_path logs/mnist-calibrated.txt \
+		--plot_path plots/mnist-calibrated.png \
+		--accuracy_path accuracy/mnist-calibrated.npz \
+		--norm_path norm/mnist-calibrated.npz
+	pipenv run python3 \
+		-m tta.cli \
+		--dataset_name MNIST \
+		--train_apply_rotation True \
+		--train_domains 9 \
+		--train_batch_size 64 \
+		--train_fraction 0.8 \
+		--train_num_layers 18 \
+		--train_steps 1000 \
+		--train_lr 1e-3 \
+		--source_prior_estimation induce \
+		--calibration_batch_size 64 \
+		--calibration_fraction 0.1 \
+		--calibration_temperature 1 \
+		--calibration_steps 0 \
+		--calibration_multiplier 1 \
+		--test_batch_size 512 \
+		--test_symmetric_dirichlet False \
+		--test_symmetric_dirichlet True \
+		--test_prior_strength 1 \
+		--test_prior_strength 4 \
+		--test_fix_marginal False \
+		--plot_title '' \
+		--seed 360234358 \
+		--num_workers 8 \
+		--log_path logs/mnist-marginal-false.txt \
+		--plot_path plots/mnist-marginal-false.png \
+		--accuracy_path accuracy/mnist-marginal-false.npz \
+		--norm_path norm/mnist-marginal-false.npz
+	pipenv run python3 \
+		-m tta.cli \
+		--dataset_name MNIST \
+		--train_apply_rotation True \
+		--train_domains 9 \
+		--train_batch_size 64 \
+		--train_fraction 0.8 \
+		--train_num_layers 18 \
+		--train_steps 1000 \
+		--train_lr 1e-3 \
+		--source_prior_estimation induce \
+		--calibration_batch_size 64 \
+		--calibration_fraction 0.1 \
+		--calibration_temperature 1 \
+		--calibration_steps 0 \
+		--calibration_multiplier 1 \
+		--test_batch_size 32 \
+		--test_symmetric_dirichlet False \
+		--test_symmetric_dirichlet True \
+		--test_prior_strength 1 \
+		--test_prior_strength 4 \
+		--test_fix_marginal True \
+		--plot_title '' \
+		--seed 360234358 \
+		--num_workers 8 \
+		--log_path logs/mnist-small-batch.txt \
+		--plot_path plots/mnist-small-batch.png \
+		--accuracy_path accuracy/mnist-small-batch.npz \
+		--norm_path norm/mnist-small-batch.npz
+	pipenv run python3 \
+		-m tta.cli \
+		--dataset_name MNIST \
+		--train_apply_rotation False \
+		--train_domains 9 \
+		--train_batch_size 64 \
+		--train_fraction 0.8 \
+		--train_num_layers 18 \
+		--train_steps 1000 \
+		--train_lr 1e-3 \
+		--source_prior_estimation induce \
+		--calibration_batch_size 64 \
+		--calibration_fraction 0.1 \
+		--calibration_temperature 1 \
+		--calibration_steps 0 \
+		--calibration_multiplier 1 \
+		--test_batch_size 512 \
+		--test_symmetric_dirichlet False \
+		--test_symmetric_dirichlet True \
+		--test_prior_strength 1 \
+		--test_prior_strength 4 \
+		--test_fix_marginal True \
+		--plot_title '' \
+		--seed 360234358 \
+		--num_workers 8 \
+		--log_path logs/mnist-no-rotation.txt \
+		--plot_path plots/mnist-no-rotation.png \
+		--accuracy_path accuracy/mnist-no-rotation.npz \
+		--norm_path norm/mnist-no-rotation.npz
+	pipenv run python3 \
+		-m tta.cli \
+		--dataset_name MNIST \
+		--train_apply_rotation True \
+		--train_domains 9 \
+		--train_batch_size 64 \
+		--train_fraction 0.8 \
+		--train_num_layers 18 \
+		--train_steps 1000 \
+		--train_lr 1e-3 \
+		--source_prior_estimation induce \
+		--calibration_batch_size 64 \
+		--calibration_fraction 0.1 \
+		--calibration_temperature 1 \
+		--calibration_steps 0 \
+		--calibration_multiplier 1 \
+		--test_batch_size 1 \
+		--test_symmetric_dirichlet False \
+		--test_symmetric_dirichlet True \
+		--test_prior_strength 1 \
+		--test_prior_strength 4 \
+		--test_fix_marginal True \
+		--plot_title '' \
+		--seed 360234358 \
+		--num_workers 8 \
+		--log_path logs/mnist-tiny-batch.txt \
+		--plot_path plots/mnist-tiny-batch.png \
+		--accuracy_path accuracy/mnist-tiny-batch.npz \
+		--norm_path norm/mnist-tiny-batch.npz
