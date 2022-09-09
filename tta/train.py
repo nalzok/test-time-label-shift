@@ -79,7 +79,7 @@ def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) -> Tuple[Train
 
 
 @partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3,), donate_argnums=(0,))
-def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, multiplier: float) -> Tuple[TrainState, jnp.ndarray]:
+def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, learning_rate: float) -> Tuple[TrainState, jnp.ndarray]:
     @partial(jax.value_and_grad)
     def loss_fn(params):
         variables = {
@@ -96,9 +96,9 @@ def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, multipli
 
     loss, grads = loss_fn(state.params)
     grads = jax.lax.psum(grads, axis_name='batch')
-    grads = jax.tree_util.tree_map(lambda x: multiplier * x, grads)
+    new_params = jax.tree_util.tree_map(lambda p, g: p - learning_rate * g, state.params, grads)
 
-    state = state.apply_gradients(grads=grads)
+    state = state.replace(params=new_params)
 
     return state, jax.lax.psum(loss, axis_name='batch')
 

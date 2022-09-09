@@ -55,7 +55,7 @@ Curves = Dict[Tuple[str, Tuple[Optional[int], Optional[bool], Optional[float], O
 @click.option('--calibration_fraction', type=float, required=True)
 @click.option('--calibration_temperature', type=float, required=True)
 @click.option('--calibration_steps', type=int, required=True)
-@click.option('--calibration_multiplier', type=float, required=True)
+@click.option('--calibration_lr', type=float, required=True)
 @click.option('--test_batch_size', type=int, required=True, multiple=True)
 @click.option('--test_symmetric_dirichlet', type=bool, required=True, multiple=True)
 @click.option('--test_prior_strength', type=float, required=True, multiple=True)
@@ -67,14 +67,14 @@ def cli(config_name: str, dataset_name: str, train_domains: str, train_apply_rot
         train_batch_size: int, train_fraction: float, train_num_layers: int,
         train_checkpoint_path: Optional[Path], train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
-        calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
+        calibration_temperature: float, calibration_steps: int, calibration_lr: float,
         test_batch_size: Sequence[int], test_symmetric_dirichlet: Sequence[bool],
         test_prior_strength: Sequence[float], test_fix_marginal: Sequence[bool],
         plot_title: str, seed: int, num_workers: int) -> None:
     main(config_name, dataset_name, train_domains, train_apply_rotation,
             train_batch_size, train_fraction, train_num_layers, train_checkpoint_path, train_steps, train_lr,
             source_prior_estimation, calibration_batch_size, calibration_fraction,
-            calibration_temperature, calibration_steps, calibration_multiplier,
+            calibration_temperature, calibration_steps, calibration_lr,
             test_batch_size, test_symmetric_dirichlet, test_prior_strength, test_fix_marginal,
             plot_title, seed, num_workers)
 
@@ -83,7 +83,7 @@ def main(config_name: str, dataset_name: str, train_domains: str, train_apply_ro
         train_batch_size: int, train_fraction: float, train_num_layers: int,
         train_checkpoint_path: Optional[Path], train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
-        calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
+        calibration_temperature: float, calibration_steps: int, calibration_lr: float,
         test_batch_size: Sequence[int], test_symmetric_dirichlet: Sequence[bool],
         test_prior_strength: Sequence[float], test_fix_marginal: Sequence[bool],
         plot_title: str, seed: int, num_workers: int) -> Tuple[Curves, Curves, Curves]:
@@ -126,7 +126,7 @@ def main(config_name: str, dataset_name: str, train_domains: str, train_apply_ro
             = train(dataset_name, train_domains_set,
             train_apply_rotation, train_batch_size, train_fraction, train_num_layers, train_checkpoint_path, train_steps, train_lr,
             source_prior_estimation, calibration_batch_size, calibration_fraction,
-            calibration_temperature, calibration_steps, calibration_multiplier,
+            calibration_temperature, calibration_steps, calibration_lr,
             device_count, key, rng, generator, num_workers)
     auc_sweeps: Curves = {('Unadapted', (None, None, None, None)): unadapted_auc_sweep}
     accuracy_sweeps: Curves = {('Unadapted', (None, None, None, None)): unadapted_accuracy_sweep}
@@ -165,7 +165,7 @@ def train(dataset_name: str, train_domains_set: Set[int], train_apply_rotation: 
         train_batch_size: int, train_fraction: float, train_num_layers: int,
         train_checkpoint_path: Optional[Path], train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
-        calibration_temperature: float, calibration_steps: int, calibration_multiplier: float,
+        calibration_temperature: float, calibration_steps: int, calibration_lr: float,
         device_count: int, key: Any, rng: np.random.Generator, generator: torch.Generator, num_workers: int) \
                 -> Tuple[TrainState, int, int, np.ndarray, List[Tuple[torch.Tensor, Dataset]], jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     if dataset_name == 'MNIST':
@@ -222,7 +222,7 @@ def train(dataset_name: str, train_domains_set: Set[int], train_apply_rotation: 
             Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
             M = Y * K + Z
 
-            state, loss = calibration_step(state, X, M, calibration_multiplier)
+            state, loss = calibration_step(state, X, M, calibration_lr)
             if step % (calibration_steps // 20 + 1) == 0:
                 with jnp.printoptions(precision=3):
                     print(f'Calibration step {step + 1}, loss: {unreplicate(loss)}')
@@ -420,7 +420,7 @@ def plot_auc(auc_sweeps: Curves, environments: np.ndarray, train_domains_set: Se
 
 def plot_accuracy(accuracy_sweeps: Curves, environments: np.ndarray, train_domains_set: Set[int], plot_title: str, plot_path: Path):
     fig, ax = plt.subplots(figsize=(12, 6))
-    upper_bound = np.maximum(np.maximum(1-environments, environments), 0.75 * np.ones_like(environments))
+    upper_bound = np.maximum(np.maximum(1-environments, environments), 0.9 * np.ones_like(environments))
     ax.plot(environments, upper_bound, linestyle=':', label='Upper bound')
 
     accuracy_sweep = accuracy_sweeps.pop(('Unadapted', (None, None, None, None)))

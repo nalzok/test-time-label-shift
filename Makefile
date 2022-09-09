@@ -17,7 +17,7 @@ debug:
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
 		--calibration_steps 0 \
-		--calibration_multiplier 1 \
+		--calibration_lr 1 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet True \
 		--test_prior_strength 4 \
@@ -32,36 +32,36 @@ sweep:
 		--joblog joblog.txt \
 		pipenv run python3 \
 		-m tta.cli \
-		--config_name source{1}_batch{2}_steps{3}_lr{4}_temp{5}_cali{6} \
+		--config_name Tbatch{1}_Tsteps{2}_Tlr{3}_Ctemp{4}_Csteps{5}_Clr{6} \
 		--dataset_name MNIST \
-		--train_domains {1} \
-		--train_batch_size {2} \
+		--train_domains 9 \
+		--train_apply_rotation True \
+		--train_batch_size {1} \
 		--train_fraction 0.8 \
 		--train_num_layers 18 \
-		--train_steps {3} \
-		--train_lr {4} \
+		--train_steps {2} \
+		--train_lr {3} \
 		--source_prior_estimation induce \
 		--calibration_batch_size 64 \
 		--calibration_fraction 0.1 \
-		--calibration_temperature {5} \
-		--calibration_steps {6} \
-		--calibration_multiplier 1 \
-		--test_batch_size 64 \
+		--calibration_temperature {4} \
+		--calibration_steps {5} \
+		--calibration_lr {6} \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
 		--test_prior_strength 1 \
-		--test_prior_strength 8 \
-		--test_fix_marginal False \
+		--test_prior_strength 4 \
 		--test_fix_marginal True \
+		--plot_title '' \
 		--seed 360234358 \
-		--num_workers 48 \
-		::: 1 \
-		::: 64 512 \
-		::: 1000 2000 \
-		::: 1e-2 1e-3 \
-		::: 0.1 1 10 \
-		::: 0 100 200
+		--num_workers 48
+		::: 64 \
+		::: 200 1000 5000 \
+		::: 1e-3 1e-2 \
+		::: 0.01 0.1 1 10 \
+		::: 0 20 100 500 \
+		::: 1e-5 1e-4 1e-3
 
 
 mnist: mnist-default mnist-calibrated mnist-marginal-false mnist-small-batch mnist-no-rotation mnist-unconfounded-source
@@ -83,7 +83,7 @@ mnist-default:
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
 		--calibration_steps 0 \
-		--calibration_multiplier 1 \
+		--calibration_lr 1 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
@@ -111,7 +111,7 @@ mnist-calibrated:
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
 		--calibration_steps 10 \
-		--calibration_multiplier 1 \
+		--calibration_lr 1 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
@@ -139,7 +139,7 @@ mnist-marginal-false:
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
 		--calibration_steps 0 \
-		--calibration_multiplier 1 \
+		--calibration_lr 1 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
@@ -167,7 +167,7 @@ mnist-small-batch:
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
 		--calibration_steps 0 \
-		--calibration_multiplier 1 \
+		--calibration_lr 1 \
 		--test_batch_size 64 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
@@ -195,7 +195,7 @@ mnist-no-rotation:
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
 		--calibration_steps 0 \
-		--calibration_multiplier 1 \
+		--calibration_lr 1 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
@@ -223,7 +223,7 @@ mnist-unconfounded-source:
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
 		--calibration_steps 0 \
-		--calibration_multiplier 1 \
+		--calibration_lr 1 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
