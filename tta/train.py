@@ -186,14 +186,19 @@ def adapt_step(state: TrainState, X: jnp.ndarray, C: int, K: int,
 
  
 @partial(jax.pmap, axis_name='batch')
-def test_step(state: TrainState, image: jnp.ndarray, label: jnp.ndarray) -> jnp.ndarray:
+def test_step(state: TrainState, image: jnp.ndarray, label: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
     variables = {
         'params': state.params,
         'batch_stats': state.batch_stats,
         'prior': state.prior
     }
     target_likelihood = state.apply_fn(variables, image, False)
+    log_likelihood_ratio = jnp.log(target_likelihood[:, 1]) - jnp.log(target_likelihood[:, 0])
+    log_likelihood_ratio = jnp.where(
+            jnp.isnan(log_likelihood_ratio),
+            jnp.zeros_like(log_likelihood_ratio),
+            log_likelihood_ratio)
     prediction = jnp.argmax(target_likelihood, axis=-1)
-    hit = jnp.sum(prediction == label)
+    hit = jax.lax.psum(jnp.sum(prediction == label), axis_name='batch')
 
-    return jax.lax.psum(hit, axis_name='batch')
+    return log_likelihood_ratio, hit

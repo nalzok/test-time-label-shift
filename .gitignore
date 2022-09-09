@@ -291,5 +291,4 @@ jit_cache/**
 joblog.txt
 logs/**.txt
 plots/**.png
-accuracy/**.npz
-norm/**.npz
+npz/**.npz

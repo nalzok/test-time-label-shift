@@ -79,7 +79,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
         # inject noise to Y
         weights = torch.ones((N, self.C))
-        weights[torch.arange(N), labels] += 2
+        weights[torch.arange(N), labels] += 2   # noise level 25% for binary label
         y = torch.multinomial(weights, 1, generator=self.generator).squeeze(dim=-1)
 
         # generate Z condition on Y

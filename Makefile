@@ -1,15 +1,16 @@
-.PHONY: debug sweep figures
+.PHONY: debug sweep mnist
 
 debug:
 	pipenv run python3 \
 		-m tta.cli \
+		--config_name debug \
 		--dataset_name MNIST \
 		--train_domains 9 \
 		--train_apply_rotation True \
 		--train_batch_size 64 \
 		--train_fraction 0.8 \
 		--train_num_layers 18 \
-		--train_steps 1000 \
+		--train_steps 100 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 64 \
@@ -18,17 +19,11 @@ debug:
 		--calibration_steps 0 \
 		--calibration_multiplier 1 \
 		--test_batch_size 512 \
-		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
-		--test_prior_strength 1 \
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
 		--seed 360234358 \
-		--num_workers 8 \
-		--log_path logs/debug.txt \
-		--plot_path plots/debug.png \
-		--accuracy_path accuracy/debug.npz \
-		--norm_path norm/debug.npz
+		--num_workers 48
 
 sweep:
 	parallel \
@@ -37,6 +32,7 @@ sweep:
 		--joblog joblog.txt \
 		pipenv run python3 \
 		-m tta.cli \
+		--config_name source{1}_batch{2}_steps{3}_lr{4}_temp{5}_cali{6} \
 		--dataset_name MNIST \
 		--train_domains {1} \
 		--train_batch_size {2} \
@@ -59,11 +55,7 @@ sweep:
 		--test_fix_marginal False \
 		--test_fix_marginal True \
 		--seed 360234358 \
-		--num_workers 8 \
-		--log_path logs/source{1}_batch{2}_steps{3}_lr{4}_temp{5}_cali{6}.txt \
-		--plot_path plots/source{1}_batch{2}_steps{3}_lr{4}_temp{5}_cali{6}.png \
-		--accuracy_path accuracy/source{1}_batch{2}_steps{3}_lr{4}_temp{5}_cali{6}.npz \
-		--norm_path norm/source{1}_batch{2}_steps{3}_lr{4}_temp{5}_cali{6}.npz \
+		--num_workers 48 \
 		::: 1 \
 		::: 64 512 \
 		::: 1000 2000 \
@@ -72,9 +64,12 @@ sweep:
 		::: 0 100 200
 
 
-figures:
+mnist: mnist-default mnist-calibrated mnist-marginal-false mnist-small-batch mnist-no-rotation mnist-unconfounded-source
+
+mnist-default:
 	pipenv run python3 \
 		-m tta.cli \
+		--config_name $@ \
 		--dataset_name MNIST \
 		--train_domains 9 \
 		--train_apply_rotation True \
@@ -97,13 +92,12 @@ figures:
 		--test_fix_marginal True \
 		--plot_title '' \
 		--seed 360234358 \
-		--num_workers 8 \
-		--log_path logs/mnist-default.txt \
-		--plot_path plots/mnist-default.png \
-		--accuracy_path accuracy/mnist-default.npz \
-		--norm_path norm/mnist-default.npz
+		--num_workers 48
+
+mnist-calibrated:
 	pipenv run python3 \
 		-m tta.cli \
+		--config_name $@ \
 		--dataset_name MNIST \
 		--train_apply_rotation True \
 		--train_domains 9 \
@@ -118,7 +112,7 @@ figures:
 		--calibration_temperature 1 \
 		--calibration_steps 10 \
 		--calibration_multiplier 1 \
-		--test_batch_size 64 \
+		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
 		--test_prior_strength 1 \
@@ -126,13 +120,12 @@ figures:
 		--test_fix_marginal True \
 		--plot_title '' \
 		--seed 360234358 \
-		--num_workers 8 \
-		--log_path logs/mnist-calibrated.txt \
-		--plot_path plots/mnist-calibrated.png \
-		--accuracy_path accuracy/mnist-calibrated.npz \
-		--norm_path norm/mnist-calibrated.npz
+		--num_workers 48
+
+mnist-marginal-false:
 	pipenv run python3 \
 		-m tta.cli \
+		--config_name $@ \
 		--dataset_name MNIST \
 		--train_apply_rotation True \
 		--train_domains 9 \
@@ -155,13 +148,12 @@ figures:
 		--test_fix_marginal False \
 		--plot_title '' \
 		--seed 360234358 \
-		--num_workers 8 \
-		--log_path logs/mnist-marginal-false.txt \
-		--plot_path plots/mnist-marginal-false.png \
-		--accuracy_path accuracy/mnist-marginal-false.npz \
-		--norm_path norm/mnist-marginal-false.npz
+		--num_workers 48
+
+mnist-small-batch:
 	pipenv run python3 \
 		-m tta.cli \
+		--config_name $@ \
 		--dataset_name MNIST \
 		--train_apply_rotation True \
 		--train_domains 9 \
@@ -176,7 +168,7 @@ figures:
 		--calibration_temperature 1 \
 		--calibration_steps 0 \
 		--calibration_multiplier 1 \
-		--test_batch_size 32 \
+		--test_batch_size 64 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
 		--test_prior_strength 1 \
@@ -184,13 +176,12 @@ figures:
 		--test_fix_marginal True \
 		--plot_title '' \
 		--seed 360234358 \
-		--num_workers 8 \
-		--log_path logs/mnist-small-batch.txt \
-		--plot_path plots/mnist-small-batch.png \
-		--accuracy_path accuracy/mnist-small-batch.npz \
-		--norm_path norm/mnist-small-batch.npz
+		--num_workers 48
+
+mnist-no-rotation:
 	pipenv run python3 \
 		-m tta.cli \
+		--config_name $@ \
 		--dataset_name MNIST \
 		--train_apply_rotation False \
 		--train_domains 9 \
@@ -213,16 +204,15 @@ figures:
 		--test_fix_marginal True \
 		--plot_title '' \
 		--seed 360234358 \
-		--num_workers 8 \
-		--log_path logs/mnist-no-rotation.txt \
-		--plot_path plots/mnist-no-rotation.png \
-		--accuracy_path accuracy/mnist-no-rotation.npz \
-		--norm_path norm/mnist-no-rotation.npz
+		--num_workers 48
+
+mnist-unconfounded-source:
 	pipenv run python3 \
 		-m tta.cli \
+		--config_name $@ \
 		--dataset_name MNIST \
 		--train_apply_rotation True \
-		--train_domains 9 \
+		--train_domains 5 \
 		--train_batch_size 64 \
 		--train_fraction 0.8 \
 		--train_num_layers 18 \
@@ -234,7 +224,7 @@ figures:
 		--calibration_temperature 1 \
 		--calibration_steps 0 \
 		--calibration_multiplier 1 \
-		--test_batch_size 1 \
+		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
 		--test_prior_strength 1 \
@@ -242,8 +232,4 @@ figures:
 		--test_fix_marginal True \
 		--plot_title '' \
 		--seed 360234358 \
-		--num_workers 8 \
-		--log_path logs/mnist-tiny-batch.txt \
-		--plot_path plots/mnist-tiny-batch.png \
-		--accuracy_path accuracy/mnist-tiny-batch.npz \
-		--norm_path norm/mnist-tiny-batch.npz
+		--num_workers 48
