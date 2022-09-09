@@ -53,9 +53,8 @@ sweep:
 		--test_prior_strength 1 \
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
-		--plot_title '' \
 		--seed 360234358 \
-		--num_workers 48
+		--num_workers 48 \
 		::: 64 \
 		::: 200 1000 5000 \
 		::: 1e-3 1e-2 \
