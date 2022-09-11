@@ -208,9 +208,12 @@ def train(dataset_name: str, train_domains_set: Set[int], train_apply_rotation: 
         M = Y * K + Z
 
         state, loss = train_step(state, X, M)
-        if step % (train_steps // 20 + 1) == 0:
+        if step % (train_steps // 21 + 1) == 0:
             with jnp.printoptions(precision=3):
                 print(f'Train step {step + 1}, loss: {unreplicate(loss)}')
+
+    # Sync the batch statistics across replicas so that evaluation is deterministic.
+    state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
 
 
     print('===> Calibrating')
@@ -223,12 +226,9 @@ def train(dataset_name: str, train_domains_set: Set[int], train_apply_rotation: 
             M = Y * K + Z
 
             state, loss = calibration_step(state, X, M, calibration_lr)
-            if step % (calibration_steps // 20 + 1) == 0:
+            if step % (calibration_steps // 21 + 1) == 0:
                 with jnp.printoptions(precision=3):
                     print(f'Calibration step {step + 1}, loss: {unreplicate(loss)}')
-
-    # Sync the batch statistics across replicas so that evaluation is deterministic.
-    state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
 
 
     print('===> Estimating Source Label Prior')
@@ -283,9 +283,9 @@ def train(dataset_name: str, train_domains_set: Set[int], train_apply_rotation: 
             X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
             Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
 
-            log_likelihood_ratio, hit = test_step(state, X, Y)
+            log_prob_ratio, hit = test_step(state, X, Y)
 
-            auc += N * roc_auc_score(Y.flatten(), log_likelihood_ratio.flatten())
+            auc += N * roc_auc_score(Y.flatten(), log_prob_ratio.flatten())
             hits += unreplicate(hit)
             prior = unreplicate(state.prior['target']).reshape((C, K))
             norm += N * jnp.linalg.norm(prior - joint)
@@ -341,9 +341,9 @@ def adapt(state: TrainState, C: int, K: int, train_domains_set: Set[int],
             Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
 
             state = adapt_step(state, X, C, K, symmetric_dirichlet, prior_strength, fix_marginal)
-            log_likelihood_ratio, hit = test_step(state, X, Y)
+            log_prob_ratio, hit = test_step(state, X, Y)
 
-            auc += N * roc_auc_score(Y.flatten(), log_likelihood_ratio.flatten())
+            auc += N * roc_auc_score(Y.flatten(), log_prob_ratio.flatten())
             hits += unreplicate(hit)
             prior = unreplicate(state.prior['target']).reshape((C, K))
             norm += N * jnp.linalg.norm(prior - joint)

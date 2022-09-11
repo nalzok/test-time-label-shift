@@ -14,7 +14,7 @@ from .models import AdaptiveResNet
 
 
 class TrainState(train_state.TrainState):
-    logits_fn: Callable = field(pytree_node=False)
+    raw_fn: Callable = field(pytree_node=False)
     calibrated_fn: Callable = field(pytree_node=False)
     batch_stats: flax.core.FrozenDict[str, jnp.ndarray]
     prior: flax.core.FrozenDict[str, jnp.ndarray]
@@ -23,7 +23,7 @@ class TrainState(train_state.TrainState):
 def create_train_state(key: Any, C: int, K: int, T: float, num_layers: int, learning_rate: float, specimen: jnp.ndarray) -> TrainState:
     net = AdaptiveResNet(C=C, K=K, T=T, num_layers=num_layers)
 
-    variables = net.init(key, specimen, True)
+    variables = net.init(key, specimen, True, method=net.adapted_prob)
     variables, params = variables.pop('params')
     variables, batch_stats = variables.pop('batch_stats')
     variables, prior = variables.pop('prior')
@@ -31,11 +31,11 @@ def create_train_state(key: Any, C: int, K: int, T: float, num_layers: int, lear
 
     tx = optax.adam(learning_rate)
     state = TrainState.create(
-            apply_fn=net.apply,
+            apply_fn=partial(net.apply, method=net.adapted_prob),
             params=params,
             tx=tx,
-            logits_fn=partial(net.apply, method=net.logits),
-            calibrated_fn=partial(net.apply, method=net.calibrated),
+            raw_fn=partial(net.apply, method=net.raw_logit),
+            calibrated_fn=partial(net.apply, method=net.calibrated_logit),
             batch_stats=batch_stats,
             prior=prior,
     )
@@ -59,11 +59,11 @@ def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) -> Tuple[Train
             'batch_stats': state.batch_stats,
             'prior': state.prior
         }
-        logits, new_model_state = state.logits_fn(
+        logit, new_model_state = state.raw_fn(
             variables, X, True, mutable=['batch_stats']
         )
 
-        loss = optax.softmax_cross_entropy_with_integer_labels(logits, M)
+        loss = optax.softmax_cross_entropy_with_integer_labels(logit, M)
 
         return loss.sum(), new_model_state
 
@@ -80,24 +80,23 @@ def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) -> Tuple[Train
 
 @partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3,), donate_argnums=(0,))
 def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, learning_rate: float) -> Tuple[TrainState, jnp.ndarray]:
-    @partial(jax.value_and_grad)
+    @jax.value_and_grad
     def loss_fn(params):
         variables = {
             'params': params,
             'batch_stats': state.batch_stats,
             'prior': state.prior
         }
-        source_likelihood = state.calibrated_fn(variables, X, False)
-        logits = jnp.log(source_likelihood)
+        logit = state.calibrated_fn(variables, X, False)
 
-        loss = optax.softmax_cross_entropy_with_integer_labels(logits, M)
+        loss = optax.softmax_cross_entropy_with_integer_labels(logit, M)
 
         return loss.sum()
 
     loss, grads = loss_fn(state.params)
     grads = jax.lax.psum(grads, axis_name='batch')
-    new_params = jax.tree_util.tree_map(lambda p, g: p - learning_rate * g, state.params, grads)
 
+    new_params = jax.tree_util.tree_map(lambda p, g: p - learning_rate * g, state.params, grads)
     state = state.replace(params=new_params)
 
     return state, jax.lax.psum(loss, axis_name='batch')
@@ -113,10 +112,11 @@ def induce_step(state: TrainState, X: jnp.ndarray) -> jnp.ndarray:
         'batch_stats': state.batch_stats,
         'prior': state.prior
     }
-    source_likelihood = state.calibrated_fn(variables, X, False)
-    source_likelihood = jax.lax.psum(jnp.sum(source_likelihood, axis=0), axis_name='batch')
+    logit = state.calibrated_fn(variables, X, False)
+    prob = jax.nn.softmax(logit)
+    prob_sum = jax.lax.psum(jnp.sum(prob, axis=0), axis_name='batch')
 
-    return source_likelihood
+    return prob_sum
 
 
 @partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(2, 3, 4, 6), donate_argnums=(0,))
@@ -135,7 +135,8 @@ def adapt_step(state: TrainState, X: jnp.ndarray, C: int, K: int,
         'batch_stats': state.batch_stats,
         'prior': state.prior
     }
-    source_likelihood = state.calibrated_fn(variables, X, False)
+    logit = state.calibrated_fn(variables, X, False)
+    prob = jax.nn.softmax(logit)
 
     init_target_prior = source_prior
     init_objective = jnp.sum((alpha - 1) * jnp.log(source_prior))
@@ -149,18 +150,18 @@ def adapt_step(state: TrainState, X: jnp.ndarray, C: int, K: int,
         target_prior, prev_objective, _ = val
 
         # E step
-        target_likelihood = target_prior * source_likelihood / source_prior
-        normalizer = jnp.sum(target_likelihood, axis=-1, keepdims=True)
-        target_likelihood = target_likelihood / normalizer
+        target_prob = target_prior * prob / source_prior
+        normalizer = jnp.sum(target_prob, axis=-1, keepdims=True)
+        target_prob = target_prob / normalizer
 
         # M step
-        target_likelihood_count = jax.lax.psum(jnp.sum(target_likelihood, axis=0), axis_name='batch')
-        target_prior_raw = target_likelihood_count + (alpha - 1)    # add pseudocount
-        target_prior = target_prior_raw / jnp.sum(target_prior_raw)
+        target_prob_count = jax.lax.psum(jnp.sum(target_prob, axis=0), axis_name='batch')
+        target_prior_count = target_prob_count + (alpha - 1)    # add pseudocount
+        target_prior = target_prior_count / jnp.sum(target_prior_count)
 
         # Objective
         log_w = jnp.log(target_prior) - jnp.log(source_prior)
-        mle_objective_i = jax.nn.logsumexp(log_w, axis=-1, b=source_likelihood)
+        mle_objective_i = jax.nn.logsumexp(log_w, axis=-1, b=prob)
         mle_objective = jax.lax.psum(jnp.sum(mle_objective_i), axis_name='batch')
         regularizer = jnp.sum((alpha - 1) * jnp.log(target_prior))
         objective = mle_objective + regularizer
@@ -192,13 +193,9 @@ def test_step(state: TrainState, image: jnp.ndarray, label: jnp.ndarray) -> Tupl
         'batch_stats': state.batch_stats,
         'prior': state.prior
     }
-    target_likelihood = state.apply_fn(variables, image, False)
-    log_likelihood_ratio = jnp.log(target_likelihood[:, 1]) - jnp.log(target_likelihood[:, 0])
-    log_likelihood_ratio = jnp.where(
-            jnp.isnan(log_likelihood_ratio),
-            jnp.zeros_like(log_likelihood_ratio),
-            log_likelihood_ratio)
-    prediction = jnp.argmax(target_likelihood, axis=-1)
+    target_prob = state.apply_fn(variables, image, False)
+    log_prob_ratio = target_prob[:, 1]      # assumes binary label
+    prediction = jnp.argmax(target_prob, axis=-1)
     hit = jax.lax.psum(jnp.sum(prediction == label), axis_name='batch')
 
-    return log_likelihood_ratio, hit
+    return log_prob_ratio, hit

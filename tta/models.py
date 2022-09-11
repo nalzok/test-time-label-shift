@@ -24,27 +24,28 @@ class AdaptiveResNet(nn.Module):
                                           None,
                                           (self.M,))
 
-    def logits(self, x, train: bool):
-        l = self.resnet(x, train)
+    def raw_logit(self, x, train: bool):
+        logit = self.resnet(x, train)
 
-        return l
+        return logit
 
-    def calibrated(self, x, train: bool):
-        logits = self.logits(x, train)
-        logits = jax.lax.stop_gradient(logits)
+    def calibrated_logit(self, x, train: bool):
+        logit = self.raw_logit(x, train)
+        logit = jax.lax.stop_gradient(logit)
 
         # bias corrected temperature scaling
-        source_likelihood = jax.nn.softmax(logits/self.T + self.b)
+        logit = logit/self.T + self.b
 
-        return source_likelihood
+        return logit
 
-    def __call__(self, x, train: bool):
-        source_likelihood = self.calibrated(x, train)
+    def adapted_prob(self, x, train: bool):
+        logit = self.calibrated_logit(x, train)
+        prob = jax.nn.softmax(logit)
 
         # adaptation
         w = self.target_prior.value / self.source_prior.value
-        source_likelihood = w * source_likelihood
-        source_likelihood = source_likelihood.reshape((-1, self.C, self.K))
-        source_likelihood = jnp.sum(source_likelihood, axis=-1)
+        prob = w * prob
+        prob = prob.reshape((-1, self.C, self.K))
+        prob = jnp.sum(prob, axis=-1)
 
-        return source_likelihood
+        return prob

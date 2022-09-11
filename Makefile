@@ -10,15 +10,16 @@ debug:
 		--train_batch_size 64 \
 		--train_fraction 0.8 \
 		--train_num_layers 18 \
-		--train_steps 100 \
-		--train_lr 1e-3 \
+		--train_steps 1000 \
+		--train_lr 1e-4 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 64 \
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
 		--calibration_steps 0 \
-		--calibration_lr 1 \
+		--calibration_lr 1e-4 \
 		--test_batch_size 512 \
+		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
@@ -32,7 +33,7 @@ sweep:
 		--joblog joblog.txt \
 		pipenv run python3 \
 		-m tta.cli \
-		--config_name Tbatch{1}_Tsteps{2}_Tlr{3}_Ctemp{4}_Csteps{5}_Clr{6} \
+		--config_name sweep_Tbatch{1}_Tsteps{2}_Tlr{3}_Ctemp{4}_Csteps{5}_Clr{6} \
 		--dataset_name MNIST \
 		--train_domains 9 \
 		--train_apply_rotation True \
@@ -55,12 +56,12 @@ sweep:
 		--test_fix_marginal True \
 		--seed 360234358 \
 		--num_workers 48 \
-		::: 64 \
-		::: 200 1000 5000 \
-		::: 1e-3 1e-2 \
+		::: 64 512 \
+		::: 1000 5000 \
+		::: 1e-4 1e-3 \
 		::: 2 4 8 16 \
 		::: 0 5 20 100 \
-		::: 1e-5 1e-4 1e-3
+		::: 1e-4 1e-3
 
 
 mnist: mnist-default mnist-calibrated mnist-marginal-false mnist-small-batch mnist-no-rotation mnist-unconfounded-source
