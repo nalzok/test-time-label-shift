@@ -33,7 +33,7 @@ sweep:
 		--joblog joblog.txt \
 		pipenv run python3 \
 		-m tta.cli \
-		--config_name sweep_Tbatch{1}_Tsteps{2}_Tlr{3}_Ctemp{4}_Csteps{5}_Clr{6} \
+		--config_name sweep_Tbatch{1}_Tsteps{2}_Tlr{3}_Cbatch{4}_Ctemp{5}_Csteps{6}_Clr{7} \
 		--dataset_name MNIST \
 		--train_domains 9 \
 		--train_apply_rotation True \
@@ -43,11 +43,11 @@ sweep:
 		--train_steps {2} \
 		--train_lr {3} \
 		--source_prior_estimation induce \
-		--calibration_batch_size 64 \
+		--calibration_batch_size {4} \
 		--calibration_fraction 0.1 \
-		--calibration_temperature {4} \
-		--calibration_steps {5} \
-		--calibration_lr {6} \
+		--calibration_temperature {5} \
+		--calibration_steps {6} \
+		--calibration_lr {7} \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
@@ -59,7 +59,8 @@ sweep:
 		::: 64 512 \
 		::: 1000 5000 \
 		::: 1e-4 1e-3 \
-		::: 2 4 8 16 \
+		::: 64 512 \
+		::: 2 \
 		::: 0 5 20 100 \
 		::: 1e-4 1e-3
 
