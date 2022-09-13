@@ -21,7 +21,7 @@ from .datasets import split
 from .datasets.mnist import MultipleDomainMNIST
 from .datasets.waterbirds import MultipleDomainWaterbirds
 from .datasets.coco import ColoredCOCO
-from .fast_data_loader import InfiniteDataLoader, FastDataLoader 
+from .datasets.fast_data_loader import InfiniteDataLoader, FastDataLoader
 from .train import (
     TrainState,
     create_train_state,
@@ -44,9 +44,10 @@ Curves = Dict[Tuple[str, Tuple[Optional[int], Optional[bool], Optional[float], O
 @click.option('--dataset_name', type=click.Choice(['MNIST', 'COCO', 'Waterbirds']), required=True)
 @click.option('--train_domains', type=str, required=True)
 @click.option('--train_apply_rotation', type=bool, required=True)
+@click.option('--train_label_noise', type=float, required=True)
 @click.option('--train_batch_size', type=int, required=True)
 @click.option('--train_fraction', type=float, required=True)
-@click.option('--train_num_layers', type=int, required=True)
+@click.option('--train_model', type=str, required=True)
 @click.option('--train_checkpoint_path', type=click.Path(path_type=Path), required=False)
 @click.option('--train_steps', type=int, required=True)
 @click.option('--train_lr', type=float, required=True)
@@ -64,15 +65,15 @@ Curves = Dict[Tuple[str, Tuple[Optional[int], Optional[bool], Optional[float], O
 @click.option('--seed', type=int, required=True)
 @click.option('--num_workers', type=int, required=True)
 def cli(config_name: str, dataset_name: str, train_domains: str, train_apply_rotation: bool,
-        train_batch_size: int, train_fraction: float, train_num_layers: int,
+        train_label_noise: float, train_batch_size: int, train_fraction: float, train_model: str,
         train_checkpoint_path: Optional[Path], train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_lr: float,
         test_batch_size: Sequence[int], test_symmetric_dirichlet: Sequence[bool],
         test_prior_strength: Sequence[float], test_fix_marginal: Sequence[bool],
         plot_title: str, seed: int, num_workers: int) -> None:
-    main(config_name, dataset_name, train_domains, train_apply_rotation,
-            train_batch_size, train_fraction, train_num_layers, train_checkpoint_path, train_steps, train_lr,
+    main(config_name, dataset_name, train_domains, train_apply_rotation, train_label_noise,
+            train_batch_size, train_fraction, train_model, train_checkpoint_path, train_steps, train_lr,
             source_prior_estimation, calibration_batch_size, calibration_fraction,
             calibration_temperature, calibration_steps, calibration_lr,
             test_batch_size, test_symmetric_dirichlet, test_prior_strength, test_fix_marginal,
@@ -80,7 +81,7 @@ def cli(config_name: str, dataset_name: str, train_domains: str, train_apply_rot
 
 
 def main(config_name: str, dataset_name: str, train_domains: str, train_apply_rotation: bool,
-        train_batch_size: int, train_fraction: float, train_num_layers: int,
+        train_label_noise: float, train_batch_size: int, train_fraction: float, train_model: str,
         train_checkpoint_path: Optional[Path], train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_lr: float,
@@ -123,11 +124,11 @@ def main(config_name: str, dataset_name: str, train_domains: str, train_apply_ro
         raise NotImplementedError('Training on multiple source distributions is not supported yet.')
 
     state, C, K, environments, test_splits, unadapted_auc_sweep, unadapted_accuracy_sweep, unadapted_norm_sweep \
-            = train(dataset_name, train_domains_set,
-            train_apply_rotation, train_batch_size, train_fraction, train_num_layers, train_checkpoint_path, train_steps, train_lr,
-            source_prior_estimation, calibration_batch_size, calibration_fraction,
-            calibration_temperature, calibration_steps, calibration_lr,
-            device_count, key, rng, generator, num_workers)
+            = train(dataset_name, train_domains_set, train_apply_rotation, train_label_noise,
+                    train_batch_size, train_fraction, train_model, train_checkpoint_path, train_steps, train_lr,
+                    source_prior_estimation, calibration_batch_size, calibration_fraction,
+                    calibration_temperature, calibration_steps, calibration_lr,
+                    device_count, key, rng, generator, num_workers)
     auc_sweeps: Curves = {('Unadapted', (None, None, None, None)): unadapted_auc_sweep}
     accuracy_sweeps: Curves = {('Unadapted', (None, None, None, None)): unadapted_accuracy_sweep}
     norm_sweeps: Curves = {('Unadapted', (None, None, None, None)): unadapted_norm_sweep}
@@ -155,14 +156,14 @@ def main(config_name: str, dataset_name: str, train_domains: str, train_apply_ro
     jnp.savez(norm_npz_path, **{k: v for (k, _), v in norm_sweeps.items()})
 
     plot_auc(auc_sweeps, environments, train_domains_set, plot_title, auc_plot_path)
-    plot_accuracy(accuracy_sweeps, environments, train_domains_set, plot_title, accuracy_plot_path)
+    plot_accuracy(accuracy_sweeps, environments, train_domains_set, train_label_noise, plot_title, accuracy_plot_path)
     plot_norm(norm_sweeps, environments, train_domains_set, plot_title, norm_plot_path)
 
     return auc_sweeps, accuracy_sweeps, norm_sweeps
 
 
 def train(dataset_name: str, train_domains_set: Set[int], train_apply_rotation: bool,
-        train_batch_size: int, train_fraction: float, train_num_layers: int,
+        train_label_noise: float, train_batch_size: int, train_fraction: float, train_model: str,
         train_checkpoint_path: Optional[Path], train_steps: int, train_lr: float,
         source_prior_estimation: str, calibration_batch_size: int, calibration_fraction: float,
         calibration_temperature: float, calibration_steps: int, calibration_lr: float,
@@ -170,7 +171,7 @@ def train(dataset_name: str, train_domains_set: Set[int], train_apply_rotation: 
                 -> Tuple[TrainState, int, int, np.ndarray, List[Tuple[torch.Tensor, Dataset]], jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     if dataset_name == 'MNIST':
         root = Path('data/')
-        dataset = MultipleDomainMNIST(root, generator, train_domains_set, train_apply_rotation)
+        dataset = MultipleDomainMNIST(root, generator, train_domains_set, train_apply_rotation, train_label_noise)
     elif dataset_name == 'COCO':
         root = Path('data/COCO/train2017')
         annFile = Path('data/COCO/annotations/instances_train2017.json')
@@ -193,7 +194,7 @@ def train(dataset_name: str, train_domains_set: Set[int], train_apply_rotation: 
 
     key_init, key = jax.random.split(key)
     specimen = jnp.empty(dataset.input_shape)
-    state = create_train_state(key_init, C, K, calibration_temperature, train_num_layers, train_lr, specimen)
+    state = create_train_state(key_init, C, K, calibration_temperature, train_model, train_lr, specimen, device_count)
     if train_checkpoint_path is not None:
         state = restore_train_state(state, train_checkpoint_path)
     state: TrainState = replicate(state)
@@ -421,9 +422,10 @@ def plot_auc(auc_sweeps: Curves, environments: np.ndarray, train_domains_set: Se
     plt.close(fig)
 
 
-def plot_accuracy(accuracy_sweeps: Curves, environments: np.ndarray, train_domains_set: Set[int], plot_title: str, plot_path: Path):
+def plot_accuracy(accuracy_sweeps: Curves, environments: np.ndarray, train_domains_set: Set[int],
+        train_label_noise: float, plot_title: str, plot_path: Path):
     fig, ax = plt.subplots(figsize=(12, 6))
-    upper_bound = np.maximum(np.maximum(1-environments, environments), 0.9 * np.ones_like(environments))
+    upper_bound = np.maximum(np.maximum(1-environments, environments), (1-train_label_noise) * np.ones_like(environments))
     ax.plot(environments, upper_bound, linestyle=':', label='Upper bound')
 
     accuracy_sweep = accuracy_sweeps.pop(('Unadapted', (None, None, None, None)))

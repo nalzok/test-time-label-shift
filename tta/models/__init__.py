@@ -3,17 +3,26 @@ import jax.numpy as jnp
 from flax import linen as nn
 
 from .resnet import ResNet
+from .lenet import LeNet
 
 
-class AdaptiveResNet(nn.Module):
-    num_layers: int
+class AdaptiveNN(nn.Module):
     C: int
     K: int
     T: float
+    model: str
 
     def setup(self):
         self.M = self.C * self.K
-        self.resnet = ResNet(num_outputs=self.M, num_layers=self.num_layers)
+
+        if self.model == 'LeNet':
+            self.net = LeNet(num_outputs=self.M)
+        elif self.model.startswith('ResNet'):
+            self.num_layers = int(self.model[6:])
+            self.net = ResNet(num_outputs=self.M, num_layers=self.num_layers)
+        else:
+            raise ValueError(f'Unknown network architecture {self.model}')
+
         self.b = self.param('b', jax.nn.initializers.zeros, (self.M,))
         self.source_prior = self.variable('prior', 'source',
                                           jax.nn.initializers.constant(1/self.M,),
@@ -25,7 +34,7 @@ class AdaptiveResNet(nn.Module):
                                           (self.M,))
 
     def raw_logit(self, x, train: bool):
-        logit = self.resnet(x, train)
+        logit = self.net(x, train)
         logit = logit - jnp.mean(logit, axis=-1, keepdims=True)
 
         return logit

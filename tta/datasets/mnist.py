@@ -11,7 +11,7 @@ from . import MultipleDomainDataset
 
 class MultipleDomainMNIST(MultipleDomainDataset):
 
-    def __init__(self, root, generator, train_domains, apply_rotation):
+    def __init__(self, root, generator, train_domains, apply_rotation, label_noise):
         self.colors = torch.ByteTensor([
             (1, 0, 0),
             (0, 1, 0),
@@ -29,6 +29,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         super().__init__(input_shape, C, K, environments)
 
         self.train_domains = train_domains
+        self.label_noise = label_noise
 
         if root is None:
             raise ValueError('Data directory not specified!')
@@ -79,7 +80,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
         # inject noise to Y
         weights = torch.ones((N, self.C))
-        weights[torch.arange(N), labels] += 8   # noise level 10% for binary labels
+        weights[torch.arange(N), labels] += 1/self.label_noise - 2  # noise level 10% for binary labels
         y = torch.multinomial(weights, 1, generator=self.generator).squeeze(dim=-1)
 
         # generate Z condition on Y

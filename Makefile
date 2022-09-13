@@ -1,6 +1,5 @@
 .PHONY: debug sweep mnist
 
-# sweep_Tbatch64_Tsteps1000_Tlr1e-2_Cbatch64_Ctemp8_Csteps10_Clr1e-3.
 debug:
 	pipenv run python3 \
 		-m tta.cli \
@@ -8,10 +7,11 @@ debug:
 		--dataset_name MNIST \
 		--train_domains 5 \
 		--train_apply_rotation True \
+		--train_label_noise 0.1 \
 		--train_batch_size 512 \
 		--train_fraction 0.8 \
-		--train_num_layers 18 \
-		--train_steps 50000 \
+		--train_model ResNet18 \
+		--train_steps 1000 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 512 \
@@ -38,9 +38,10 @@ sweep:
 		--dataset_name MNIST \
 		--train_domains 9 \
 		--train_apply_rotation True \
+		--train_label_noise 0.1 \
 		--train_batch_size {1} \
 		--train_fraction 0.8 \
-		--train_num_layers 18 \
+		--train_model LeNet \
 		--train_steps {2} \
 		--train_lr {3} \
 		--source_prior_estimation induce \
@@ -58,10 +59,10 @@ sweep:
 		--seed 360234358 \
 		--num_workers 48 \
 		::: 64 512 \
-		::: 1000 5000 \
+		::: 2000 10000 50000 \
 		::: 1e-4 1e-3 \
 		::: 64 512 \
-		::: 2 \
+		::: 2 4 8 16 \
 		::: 0 5 20 100 \
 		::: 1e-4 1e-3
 

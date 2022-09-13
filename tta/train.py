@@ -10,7 +10,7 @@ from flax.training.checkpoints import save_checkpoint, restore_checkpoint
 from flax.struct import field
 import optax
 
-from .models import AdaptiveResNet
+from .models import AdaptiveNN
 
 
 class TrainState(train_state.TrainState):
@@ -20,12 +20,16 @@ class TrainState(train_state.TrainState):
     prior: flax.core.FrozenDict[str, jnp.ndarray]
 
 
-def create_train_state(key: Any, C: int, K: int, T: float, num_layers: int, learning_rate: float, specimen: jnp.ndarray) -> TrainState:
-    net = AdaptiveResNet(C=C, K=K, T=T, num_layers=num_layers)
+def create_train_state(key: Any, C: int, K: int, T: float, model: str,
+        learning_rate: float, specimen: jnp.ndarray, device_count: int) -> TrainState:
+    net = AdaptiveNN(C=C, K=K, T=T, model=model)
 
     variables = net.init(key, specimen, True, method=net.adapted_prob)
     variables, params = variables.pop('params')
-    variables, batch_stats = variables.pop('batch_stats')
+    if 'batch_stats' in variables:
+        variables, batch_stats = variables.pop('batch_stats')
+    else:
+        batch_stats = {'dummy': jnp.empty(device_count)}
     variables, prior = variables.pop('prior')
     assert not variables
 
