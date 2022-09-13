@@ -230,6 +230,9 @@ def train(dataset_name: str, train_domains_set: Set[int], train_apply_rotation: 
                 with jnp.printoptions(precision=3):
                     print(f'Calibration step {step + 1}, loss: {unreplicate(loss)}')
 
+    # Sync the batch statistics across replicas so that evaluation is deterministic.
+    state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
+
 
     print('===> Estimating Source Label Prior')
     if source_prior_estimation == 'average':

@@ -1,23 +1,24 @@
 .PHONY: debug sweep mnist
 
+# sweep_Tbatch64_Tsteps1000_Tlr1e-2_Cbatch64_Ctemp8_Csteps10_Clr1e-3.
 debug:
 	pipenv run python3 \
 		-m tta.cli \
 		--config_name debug \
 		--dataset_name MNIST \
-		--train_domains 9 \
+		--train_domains 5 \
 		--train_apply_rotation True \
-		--train_batch_size 64 \
+		--train_batch_size 512 \
 		--train_fraction 0.8 \
 		--train_num_layers 18 \
-		--train_steps 1000 \
-		--train_lr 1e-4 \
+		--train_steps 50000 \
+		--train_lr 1e-3 \
 		--source_prior_estimation induce \
-		--calibration_batch_size 64 \
+		--calibration_batch_size 512 \
 		--calibration_fraction 0.1 \
-		--calibration_temperature 1 \
-		--calibration_steps 0 \
-		--calibration_lr 1e-4 \
+		--calibration_temperature 8 \
+		--calibration_steps 100 \
+		--calibration_lr 1e-3 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \

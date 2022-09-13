@@ -68,6 +68,7 @@ def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) -> Tuple[Train
         return loss.sum(), new_model_state
 
     (loss, new_model_state), grads = loss_fn(state.params)
+    loss = jax.lax.psum(loss, axis_name='batch')
     grads = jax.lax.psum(grads, axis_name='batch')
 
     state = state.apply_gradients(
@@ -75,31 +76,37 @@ def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) -> Tuple[Train
         batch_stats=new_model_state['batch_stats'],
     )
 
-    return state, jax.lax.psum(loss, axis_name='batch')
+    return state, loss
 
 
 @partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3,), donate_argnums=(0,))
 def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, learning_rate: float) -> Tuple[TrainState, jnp.ndarray]:
-    @jax.value_and_grad
+    @partial(jax.value_and_grad, has_aux=True)
     def loss_fn(params):
         variables = {
             'params': params,
             'batch_stats': state.batch_stats,
             'prior': state.prior
         }
-        logit = state.calibrated_fn(variables, X, False)
+        logit, new_model_state = state.calibrated_fn(
+            variables, X, True, mutable=['batch_stats']
+        )
 
         loss = optax.softmax_cross_entropy_with_integer_labels(logit, M)
 
-        return loss.sum()
+        return loss.sum(), new_model_state
 
-    loss, grads = loss_fn(state.params)
+    (loss, new_model_state), grads = loss_fn(state.params)
+    loss = jax.lax.psum(loss, axis_name='batch')
     grads = jax.lax.psum(grads, axis_name='batch')
 
     new_params = jax.tree_util.tree_map(lambda p, g: p - learning_rate * g, state.params, grads)
-    state = state.replace(params=new_params)
+    state = state.replace(
+        params=new_params,
+        batch_stats=new_model_state['batch_stats'],
+    )
 
-    return state, jax.lax.psum(loss, axis_name='batch')
+    return state, loss
 
 
 cross_replica_mean: Callable = jax.pmap(lambda x: jax.lax.pmean(x, 'batch'), 'batch')
