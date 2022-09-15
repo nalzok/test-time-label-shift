@@ -8,20 +8,21 @@ debug:
 		--train_domains 5 \
 		--train_apply_rotation True \
 		--train_label_noise 0.1 \
-		--train_batch_size 512 \
+		--train_batch_size 64 \
 		--train_fraction 0.8 \
-		--train_model ResNet18 \
-		--train_steps 1000 \
+		--train_model LeNet \
+		--train_steps 16384 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 512 \
 		--calibration_fraction 0.1 \
-		--calibration_temperature 8 \
+		--calibration_temperature 1 \
 		--calibration_steps 100 \
 		--calibration_lr 1e-3 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
+		--test_prior_strength 1 \
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
 		--seed 360234358 \
@@ -62,12 +63,12 @@ sweep:
 		::: 2048 16384 \
 		::: 1e-4 1e-3 \
 		::: 64 512 \
-		::: 2 4 8 16 \
+		::: 1 \
 		::: 0 10 100 \
 		::: 1e-4 1e-3
 
 
-mnist: mnist-default mnist-calibrated mnist-marginal-false mnist-small-batch mnist-no-rotation mnist-unconfounded-source
+mnist: mnist-default mnist-unconfounded-source mnist-no-calibration mnist-no-fixed-marginal mnist-small-batch mnist-no-rotation
 
 mnist-default:
 	pipenv run python3 \
@@ -76,136 +77,25 @@ mnist-default:
 		--dataset_name MNIST \
 		--train_domains 9 \
 		--train_apply_rotation True \
+		--train_label_noise 0.1 \
 		--train_batch_size 64 \
 		--train_fraction 0.8 \
-		--train_num_layers 18 \
-		--train_steps 1000 \
+		--train_model LeNet \
+		--train_steps 16384 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
-		--calibration_batch_size 64 \
+		--calibration_batch_size 512 \
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
-		--calibration_steps 0 \
-		--calibration_lr 1 \
+		--calibration_steps 100 \
+		--calibration_lr 1e-3 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
 		--test_prior_strength 1 \
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
-		--plot_title '' \
-		--seed 360234358 \
-		--num_workers 48
-
-mnist-calibrated:
-	pipenv run python3 \
-		-m tta.cli \
-		--config_name $@ \
-		--dataset_name MNIST \
-		--train_apply_rotation True \
-		--train_domains 9 \
-		--train_batch_size 64 \
-		--train_fraction 0.8 \
-		--train_num_layers 18 \
-		--train_steps 1000 \
-		--train_lr 1e-3 \
-		--source_prior_estimation induce \
-		--calibration_batch_size 64 \
-		--calibration_fraction 0.1 \
-		--calibration_temperature 1 \
-		--calibration_steps 10 \
-		--calibration_lr 1 \
-		--test_batch_size 512 \
-		--test_symmetric_dirichlet False \
-		--test_symmetric_dirichlet True \
-		--test_prior_strength 1 \
-		--test_prior_strength 4 \
-		--test_fix_marginal True \
-		--plot_title '' \
-		--seed 360234358 \
-		--num_workers 48
-
-mnist-marginal-false:
-	pipenv run python3 \
-		-m tta.cli \
-		--config_name $@ \
-		--dataset_name MNIST \
-		--train_apply_rotation True \
-		--train_domains 9 \
-		--train_batch_size 64 \
-		--train_fraction 0.8 \
-		--train_num_layers 18 \
-		--train_steps 1000 \
-		--train_lr 1e-3 \
-		--source_prior_estimation induce \
-		--calibration_batch_size 64 \
-		--calibration_fraction 0.1 \
-		--calibration_temperature 1 \
-		--calibration_steps 0 \
-		--calibration_lr 1 \
-		--test_batch_size 512 \
-		--test_symmetric_dirichlet False \
-		--test_symmetric_dirichlet True \
-		--test_prior_strength 1 \
-		--test_prior_strength 4 \
-		--test_fix_marginal False \
-		--plot_title '' \
-		--seed 360234358 \
-		--num_workers 48
-
-mnist-small-batch:
-	pipenv run python3 \
-		-m tta.cli \
-		--config_name $@ \
-		--dataset_name MNIST \
-		--train_apply_rotation True \
-		--train_domains 9 \
-		--train_batch_size 64 \
-		--train_fraction 0.8 \
-		--train_num_layers 18 \
-		--train_steps 1000 \
-		--train_lr 1e-3 \
-		--source_prior_estimation induce \
-		--calibration_batch_size 64 \
-		--calibration_fraction 0.1 \
-		--calibration_temperature 1 \
-		--calibration_steps 0 \
-		--calibration_lr 1 \
-		--test_batch_size 64 \
-		--test_symmetric_dirichlet False \
-		--test_symmetric_dirichlet True \
-		--test_prior_strength 1 \
-		--test_prior_strength 4 \
-		--test_fix_marginal True \
-		--plot_title '' \
-		--seed 360234358 \
-		--num_workers 48
-
-mnist-no-rotation:
-	pipenv run python3 \
-		-m tta.cli \
-		--config_name $@ \
-		--dataset_name MNIST \
-		--train_apply_rotation False \
-		--train_domains 9 \
-		--train_batch_size 64 \
-		--train_fraction 0.8 \
-		--train_num_layers 18 \
-		--train_steps 1000 \
-		--train_lr 1e-3 \
-		--source_prior_estimation induce \
-		--calibration_batch_size 64 \
-		--calibration_fraction 0.1 \
-		--calibration_temperature 1 \
-		--calibration_steps 0 \
-		--calibration_lr 1 \
-		--test_batch_size 512 \
-		--test_symmetric_dirichlet False \
-		--test_symmetric_dirichlet True \
-		--test_prior_strength 1 \
-		--test_prior_strength 4 \
-		--test_fix_marginal True \
-		--plot_title '' \
+		--plot_title 'Default Setting' \
 		--seed 360234358 \
 		--num_workers 48
 
@@ -214,25 +104,142 @@ mnist-unconfounded-source:
 		-m tta.cli \
 		--config_name $@ \
 		--dataset_name MNIST \
-		--train_apply_rotation True \
 		--train_domains 5 \
+		--train_apply_rotation True \
+		--train_label_noise 0.1 \
 		--train_batch_size 64 \
 		--train_fraction 0.8 \
-		--train_num_layers 18 \
-		--train_steps 1000 \
+		--train_model LeNet \
+		--train_steps 16384 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
-		--calibration_batch_size 64 \
+		--calibration_batch_size 512 \
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
-		--calibration_steps 0 \
-		--calibration_lr 1 \
+		--calibration_steps 100 \
+		--calibration_lr 1e-3 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
 		--test_prior_strength 1 \
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
-		--plot_title '' \
+		--plot_title 'Training on unconfounded source' \
+		--seed 360234358 \
+		--num_workers 48
+
+mnist-no-calibration:
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name $@ \
+		--dataset_name MNIST \
+		--train_domains 9 \
+		--train_apply_rotation True \
+		--train_label_noise 0.1 \
+		--train_batch_size 64 \
+		--train_fraction 0.8 \
+		--train_model LeNet \
+		--train_steps 16384 \
+		--train_lr 1e-3 \
+		--source_prior_estimation induce \
+		--calibration_batch_size 512 \
+		--calibration_fraction 0 \
+		--calibration_temperature 1 \
+		--calibration_steps 0 \
+		--calibration_lr 0 \
+		--test_batch_size 512 \
+		--test_symmetric_dirichlet False \
+		--test_symmetric_dirichlet True \
+		--test_prior_strength 1 \
+		--test_prior_strength 4 \
+		--test_fix_marginal True \
+		--plot_title 'Without calibration' \
+		--seed 360234358 \
+		--num_workers 48
+
+mnist-no-fixed-marginal:
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name $@ \
+		--dataset_name MNIST \
+		--train_domains 9 \
+		--train_apply_rotation True \
+		--train_label_noise 0.1 \
+		--train_batch_size 64 \
+		--train_fraction 0.8 \
+		--train_model LeNet \
+		--train_steps 16384 \
+		--train_lr 1e-3 \
+		--source_prior_estimation induce \
+		--calibration_batch_size 512 \
+		--calibration_fraction 0.1 \
+		--calibration_temperature 1 \
+		--calibration_steps 100 \
+		--calibration_lr 1e-3 \
+		--test_batch_size 512 \
+		--test_symmetric_dirichlet False \
+		--test_symmetric_dirichlet True \
+		--test_prior_strength 1 \
+		--test_prior_strength 4 \
+		--test_fix_marginal True \
+		--plot_title 'Without fixing p_t(y)' \
+		--seed 360234358 \
+		--num_workers 48
+
+mnist-small-batch:
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name $@ \
+		--dataset_name MNIST \
+		--train_domains 9 \
+		--train_apply_rotation True \
+		--train_label_noise 0.1 \
+		--train_batch_size 64 \
+		--train_fraction 0.8 \
+		--train_model LeNet \
+		--train_steps 16384 \
+		--train_lr 1e-3 \
+		--source_prior_estimation induce \
+		--calibration_batch_size 512 \
+		--calibration_fraction 0.1 \
+		--calibration_temperature 1 \
+		--calibration_steps 100 \
+		--calibration_lr 1e-3 \
+		--test_batch_size 64 \
+		--test_symmetric_dirichlet False \
+		--test_symmetric_dirichlet True \
+		--test_prior_strength 1 \
+		--test_prior_strength 4 \
+		--test_fix_marginal True \
+		--plot_title 'Using a small batch size of 8' \
+		--seed 360234358 \
+		--num_workers 48
+
+mnist-no-rotation:
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name $@ \
+		--dataset_name MNIST \
+		--train_domains 9 \
+		--train_apply_rotation True \
+		--train_label_noise 0.1 \
+		--train_batch_size 64 \
+		--train_fraction 0.8 \
+		--train_model LeNet \
+		--train_steps 16384 \
+		--train_lr 1e-3 \
+		--source_prior_estimation induce \
+		--calibration_batch_size 512 \
+		--calibration_fraction 0.1 \
+		--calibration_temperature 1 \
+		--calibration_steps 100 \
+		--calibration_lr 1e-3 \
+		--test_batch_size 512 \
+		--test_symmetric_dirichlet False \
+		--test_symmetric_dirichlet True \
+		--test_prior_strength 1 \
+		--test_prior_strength 4 \
+		--test_fix_marginal True \
+		--plot_title 'Disabling rotation' \
 		--seed 360234358 \
 		--num_workers 48
