@@ -214,7 +214,7 @@ def main(
         C,
         K,
         environments,
-        test_splits,
+        eval_splits,
         unadapted_auc_sweep,
         unadapted_accuracy_sweep,
         unadapted_norm_sweep,
@@ -266,7 +266,7 @@ def main(
             K,
             train_domains_set,
             calibration_domains_set,
-            test_splits,
+            eval_splits,
             symmetric_dirichlet,
             prior_strength,
             fix_marginal,
@@ -343,18 +343,30 @@ def train(
     if dataset_name == "MNIST":
         root = Path("data/")
         dataset = MultipleDomainMNIST(
-            root, generator, train_domains_set, dataset_apply_rotation, dataset_label_noise
+            root,
+            generator,
+            train_domains_set,
+            dataset_apply_rotation,
+            dataset_label_noise,
         )
     elif dataset_name == "COCO":
-        assert dataset_apply_rotation is False, 'Parameter dataset_apply_rotation is not supported with COCO'
-        assert dataset_label_noise == 0, 'Parameter dataset_label_noise is not supported with COCO'
+        assert (
+            dataset_apply_rotation is False
+        ), "Parameter dataset_apply_rotation is not supported with COCO"
+        assert (
+            dataset_label_noise == 0
+        ), "Parameter dataset_label_noise is not supported with COCO"
 
         root = Path("data/COCO/train2017")
         annFile = Path("data/COCO/annotations/instances_train2017.json")
         dataset = ColoredCOCO(root, annFile, generator)
     elif dataset_name == "Waterbirds":
-        assert dataset_apply_rotation is False, 'Parameter dataset_apply_rotation is not supported with Waterbirds'
-        assert dataset_label_noise == 0, 'Parameter dataset_label_noise is not supported with Waterbirds'
+        assert (
+            dataset_apply_rotation is False
+        ), "Parameter dataset_apply_rotation is not supported with Waterbirds"
+        assert (
+            dataset_label_noise == 0
+        ), "Parameter dataset_label_noise is not supported with Waterbirds"
 
         root = Path("data/")
         dataset = MultipleDomainWaterbirds(root, generator, train_domains_set)
@@ -366,12 +378,21 @@ def train(
         raise NotImplementedError("Multi-label classification is not supported yet.")
 
     train, calibration, test_splits = split(
-        dataset, train_domains_set, train_fraction, train_calibration_fraction, calibration_domains_set, calibration_fraction, rng
+        dataset,
+        train_domains_set,
+        train_fraction,
+        train_calibration_fraction,
+        calibration_domains_set,
+        calibration_fraction,
+        rng,
     )
     print("train", len(train))
     print("calibration", len(calibration))
     train_domain = next(iter(train_domains_set))
     print(f"test_splits[{train_domain}][1]", len(test_splits[train_domain][1]))
+
+    eval_splits = test_splits.copy()
+    eval_splits.append((test_splits[train_domain][0], train))
 
     key_init, key = jax.random.split(key)
     specimen = jnp.empty(dataset.input_shape)
@@ -400,9 +421,9 @@ def train(
         M = Y * K + Z
 
         state, loss = train_step(state, X, M)
-        if step % (train_steps // 21 + 1) == 0:
-            with jnp.printoptions(precision=3):
-                print(f"Train step {step + 1}, loss: {unreplicate(loss)}")
+        # if step % (train_steps // 21 + 1) == 0:
+        with jnp.printoptions(precision=3):
+            print(f"Train step {step + 1}, loss: {unreplicate(loss)}")
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
@@ -478,25 +499,31 @@ def train(
     prior["target"] = prior["source"]
     state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
 
-    auc_sweep = jnp.empty(len(test_splits))
-    accuracy_sweep = jnp.empty(len(test_splits))
-    norm_sweep = jnp.empty(len(test_splits))
-    for i, (joint, test) in enumerate(test_splits):
-        # happens on the source domain when train_fraction = 1
-        if len(test) == 0:
+    auc_sweep = jnp.empty(len(eval_splits))
+    accuracy_sweep = jnp.empty(len(eval_splits))
+    norm_sweep = jnp.empty(len(eval_splits))
+    for i, (joint, eval_) in enumerate(eval_splits):
+        # happens on the source domain when train_fraction = 1.0
+        if len(eval_) == 0:
             auc_sweep = auc_sweep.at[i].set(jnp.nan)
             accuracy_sweep = accuracy_sweep.at[i].set(jnp.nan)
             norm_sweep = norm_sweep.at[i].set(jnp.nan)
             continue
 
-        seen = "  (seen)" if i in train_domains_set.union(calibration_domains_set) else "(unseen)"
+        seen = (
+            "  (seen)"
+            if i in train_domains_set.union(calibration_domains_set)
+            else " (train)"
+            if i == len(eval_splits) - 1
+            else "(unseen)"
+        )
 
         auc = hits = norm = 0
         joint = jnp.array(joint)
 
         # batch size should not matter since we are not doing adaptation
-        test_loader = FastDataLoader(test, train_batch_size, num_workers, generator)
-        for X, Y, _ in test_loader:
+        eval_loader = FastDataLoader(eval_, train_batch_size, num_workers, generator)
+        for X, Y, _ in eval_loader:
             remainder = X.shape[0] % device_count
             if remainder != 0:
                 X = X[:-remainder]
@@ -513,20 +540,24 @@ def train(
             prior = unreplicate(state.prior["target"]).reshape((C, K))
             norm += N * jnp.linalg.norm(prior - joint)
 
-        auc = auc / len(test)
-        auc_sweep = auc_sweep.at[i].set(auc)
-        accuracy = hits / len(test)
-        accuracy_sweep = accuracy_sweep.at[i].set(accuracy)
-        norm = norm / len(test)
-        norm_sweep = norm_sweep.at[i].set(norm)
+        auc = auc / len(eval_)
+        accuracy = hits / len(eval_)
+        norm = norm / len(eval_)
 
         with jnp.printoptions(precision=4):
             print(
                 f"[{label}] Environment {i:>2} {seen} AUC {auc}, Accuracy {accuracy}, Norm {norm}"
             )
 
+        # note that auc/accuracy/norm_sweep.at[-1] is the training auc/accuracy/norm
+        auc_sweep = auc_sweep.at[i].set(auc)
+        accuracy_sweep = accuracy_sweep.at[i].set(accuracy)
+        norm_sweep = norm_sweep.at[i].set(norm)
+
     print(
-        f"[{label}] Average AUC {jnp.nanmean(auc_sweep)}, Accuracy {jnp.nanmean(accuracy_sweep)}, Norm {jnp.nanmean(norm_sweep)}"
+        f"[{label}] Average AUC {jnp.nanmean(auc_sweep[:-1])}, "
+        f"Accuracy {jnp.nanmean(accuracy_sweep[:-1])}, "
+        f"Norm {jnp.nanmean(norm_sweep[:-1])}"
     )
 
     return (
@@ -534,7 +565,7 @@ def train(
         C,
         K,
         dataset.environments,
-        test_splits,
+        eval_splits,
         auc_sweep,
         accuracy_sweep,
         norm_sweep,
@@ -547,7 +578,7 @@ def adapt(
     K: int,
     train_domains_set: Set[int],
     calibration_domains_set: Set[int],
-    test_splits: Sequence[Tuple[torch.Tensor, Dataset]],
+    eval_splits: Sequence[Tuple[torch.Tensor, Dataset]],
     symmetric_dirichlet: bool,
     prior_strength: float,
     fix_marginal: bool,
@@ -561,24 +592,30 @@ def adapt(
     print(f"---> {label}")
     prior_strength = replicate(prior_strength)
 
-    auc_sweep = jnp.empty(len(test_splits))
-    accuracy_sweep = jnp.empty(len(test_splits))
-    norm_sweep = jnp.empty(len(test_splits))
-    for i, (joint, test) in enumerate(test_splits):
+    auc_sweep = jnp.empty(len(eval_splits))
+    accuracy_sweep = jnp.empty(len(eval_splits))
+    norm_sweep = jnp.empty(len(eval_splits))
+    for i, (joint, eval_) in enumerate(eval_splits):
         # happens on the source domain when train_fraction = 1
-        if len(test) == 0:
+        if len(eval_) == 0:
             auc_sweep = auc_sweep.at[i].set(jnp.nan)
             accuracy_sweep = accuracy_sweep.at[i].set(jnp.nan)
             norm_sweep = norm_sweep.at[i].set(jnp.nan)
             continue
 
-        seen = "  (seen)" if i in train_domains_set.union(calibration_domains_set) else "(unseen)"
+        seen = (
+            "  (seen)"
+            if i in train_domains_set.union(calibration_domains_set)
+            else " (train)"
+            if i == len(eval_splits) - 1
+            else "(unseen)"
+        )
 
         auc = hits = norm = 0
         joint = jnp.array(joint)
 
-        test_loader = FastDataLoader(test, batch_size, num_workers, generator)
-        for X, Y, _ in test_loader:
+        eval_loader = FastDataLoader(eval_, batch_size, num_workers, generator)
+        for X, Y, _ in eval_loader:
             remainder = X.shape[0] % device_count
             if remainder != 0:
                 X = X[:-remainder]
@@ -598,20 +635,24 @@ def adapt(
             prior = unreplicate(state.prior["target"]).reshape((C, K))
             norm += N * jnp.linalg.norm(prior - joint)
 
-        auc = auc / len(test)
-        auc_sweep = auc_sweep.at[i].set(auc)
-        accuracy = hits / len(test)
-        accuracy_sweep = accuracy_sweep.at[i].set(accuracy)
-        norm = norm / len(test)
-        norm_sweep = norm_sweep.at[i].set(norm)
+        auc = auc / len(eval_)
+        accuracy = hits / len(eval_)
+        norm = norm / len(eval_)
 
         with jnp.printoptions(precision=4):
             print(
                 f"[{label}] Environment {i:>2} {seen} AUC {auc}, Accuracy {accuracy}, Norm {norm}"
             )
 
+        # note that auc/accuracy/norm_sweep.at[-1] is the training auc/accuracy/norm
+        auc_sweep = auc_sweep.at[i].set(auc)
+        accuracy_sweep = accuracy_sweep.at[i].set(accuracy)
+        norm_sweep = norm_sweep.at[i].set(norm)
+
     print(
-        f"[{label}] Average AUC {jnp.nanmean(auc_sweep)}, Accuracy {jnp.nanmean(accuracy_sweep)}, Norm {jnp.nanmean(norm_sweep)}"
+        f"[{label}] Average AUC {jnp.nanmean(auc_sweep[:-1])}, "
+        f"Accuracy {jnp.nanmean(accuracy_sweep[:-1])}, "
+        f"Norm {jnp.nanmean(norm_sweep[:-1])}"
     )
 
     return state, auc_sweep, accuracy_sweep, norm_sweep
@@ -668,16 +709,16 @@ def plot_auc(
     fig, ax = plt.subplots(figsize=(12, 6))
 
     auc_sweep = auc_sweeps.pop(("Unadapted", (None, None, None, None)))
-    ax.plot(environments, auc_sweep, linestyle="--", label="Unadapted")
+    ax.plot(environments, auc_sweep[:-1], linestyle="--", label="Unadapted")
 
     for (label, _), auc_sweep in auc_sweeps.items():
-        ax.plot(environments, auc_sweep, label=label)
+        ax.plot(environments, auc_sweep[:-1], label=label)
 
     for i in train_domains_set:
         ax.axvline(environments[i], linestyle=":")
 
     plt.ylim((0, 1))
-    plt.xlabel("Shift Parameter")
+    plt.xlabel("Shift parameter")
     plt.ylabel("Average AUC")
     plt.title(plot_title)
     plt.grid(True)
@@ -705,16 +746,16 @@ def plot_accuracy(
         ax.plot(environments, upper_bound, linestyle=":", label="Upper bound")
 
     accuracy_sweep = accuracy_sweeps.pop(("Unadapted", (None, None, None, None)))
-    ax.plot(environments, accuracy_sweep, linestyle="--", label="Unadapted")
+    ax.plot(environments, accuracy_sweep[:-1], linestyle="--", label="Unadapted")
 
     for (label, _), accuracy_sweep in accuracy_sweeps.items():
-        ax.plot(environments, accuracy_sweep, label=label)
+        ax.plot(environments, accuracy_sweep[:-1], label=label)
 
     for i in train_domains_set:
         ax.axvline(environments[i], linestyle=":")
 
     plt.ylim((0, 1))
-    plt.xlabel("Shift Parameter")
+    plt.xlabel("Shift parameter")
     plt.ylabel("Accuracy")
     plt.title(plot_title)
     plt.grid(True)
@@ -734,16 +775,17 @@ def plot_norm(
     fig, ax = plt.subplots(figsize=(12, 6))
 
     norm_sweep = norm_sweeps.pop(("Unadapted", (None, None, None, None)))
-    ax.plot(environments, norm_sweep, linestyle="--", label="Unadapted")
+    ax.plot(environments, norm_sweep[:-1], linestyle="--", label="Unadapted")
 
     for (label, _), norm_sweep in norm_sweeps.items():
-        ax.plot(environments, norm_sweep, label=label)
+        ax.plot(environments, norm_sweep[:-1], label=label)
 
     for i in train_domains_set:
         ax.axvline(environments[i], linestyle=":")
 
-    plt.xlabel("Shift Parameter")
-    plt.ylabel("Frobenius norm")
+    plt.ylim((0, 1))
+    plt.xlabel("Shift parameter")
+    plt.ylabel("Euclidean distance")
     plt.title(plot_title)
     plt.grid(True)
     plt.legend()

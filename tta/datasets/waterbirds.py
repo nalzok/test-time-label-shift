@@ -1,3 +1,4 @@
+from collections import Counter
 import numpy as np
 import torch
 from torchvision import transforms as T
@@ -36,19 +37,36 @@ class MultipleDomainWaterbirds(MultipleDomainDataset):
             np.array([[0.5, 0.5], [0.5, 0.5]]),
         ]
 
-        transform = T.Compose([
-            T.Resize((224, 224)),
+        # ImageNet augmentation
+        normalize = T.Normalize(mean=[0.485, 0.456, 0.406],
+                                std=[0.229, 0.224, 0.225])
+        permute = T.Lambda(lambda x: x.permute(1, 2, 0))
+        random_transform = T.Compose([
+            T.RandomResizedCrop(224),
+            T.RandomHorizontalFlip(),
             T.ToTensor(),
-            T.Lambda(lambda x: x.permute(1, 2, 0))
+            normalize,
+            permute,
+        ])
+        deterministic_transform = T.Compose([
+            T.Resize(256),
+            T.CenterCrop(224),
+            T.ToTensor(),
+            normalize,
+            permute,
         ])
 
         for env in self.environments:
             conditional = torch.from_numpy(conditionals[env])
             domain_name = self.domain_names[env]
+            transform = random_transform if domain_name == 'train' else deterministic_transform
             domain = self.waterbirds.get_subset(domain_name, transform=transform)
 
-            joint = torch.zeros_like(conditional)
-            for _, label, _ in domain:
-                joint[label] += conditional[label]
+            counter = Counter(int(label) for _, label, _ in domain)
+            y_count = torch.zeros(C)
+            for label in counter:
+                y_count[label] += counter[label]
+            joint = torch.sum(y_count[:, np.newaxis] * conditional, 0)
             joint /= len(domain)
+
             self.domains.append((joint, domain))

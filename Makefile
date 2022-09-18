@@ -4,27 +4,29 @@ debug:
 	pipenv run python3 \
 		-m tta.cli \
 		--config_name debug \
-		--dataset_name MNIST \
-		--train_domains 5 \
-		--train_apply_rotation True \
-		--train_label_noise 0.1 \
-		--train_batch_size 64 \
-		--train_fraction 0.8 \
-		--train_model LeNet \
-		--train_steps 16384 \
+		--dataset_name Waterbirds \
+		--dataset_apply_rotation False \
+		--dataset_label_noise 0 \
+		--train_model ResNet18 \
+		--train_domains 0 \
+		--train_fraction 0.9 \
+		--train_calibration_fraction 0.0 \
+		--train_batch_size 512 \
+		--train_steps 2000 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
-		--calibration_batch_size 512 \
-		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
+		--calibration_domains 1 \
+		--calibration_fraction 0.8 \
+		--calibration_batch_size 512 \
 		--calibration_steps 100 \
 		--calibration_lr 1e-3 \
-		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
 		--test_prior_strength 1 \
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
+		--test_batch_size 512 \
 		--seed 360234358 \
 		--num_workers 48
 
@@ -35,37 +37,41 @@ sweep:
 		--joblog joblog.txt \
 		pipenv run python3 \
 		-m tta.cli \
-		--config_name sweep_Tbatch{1}_Tsteps{2}_Tlr{3}_Cbatch{4}_Ctemp{5}_Csteps{6}_Clr{7} \
-		--dataset_name MNIST \
-		--train_domains 9 \
-		--train_apply_rotation True \
-		--train_label_noise 0.1 \
-		--train_batch_size {1} \
-		--train_fraction 0.8 \
-		--train_model LeNet \
-		--train_steps {2} \
-		--train_lr {3} \
+		--config_name sweep_{1}_{2}_Tbatch{3}_Tsteps{4}_Tlr{5}_temp{6}_Cbatch{7}_Csteps{8}_Clr{9} \
+		--dataset_name {1} \
+		--dataset_apply_rotation False \
+		--dataset_label_noise 0 \
+		--train_model {2} \
+		--train_domains 0 \
+		--train_fraction 1.0 \
+		--train_calibration_fraction 0.0 \
+		--train_batch_size {3} \
+		--train_steps {4} \
+		--train_lr {5} \
 		--source_prior_estimation induce \
-		--calibration_batch_size {4} \
-		--calibration_fraction 0.1 \
-		--calibration_temperature {5} \
-		--calibration_steps {6} \
-		--calibration_lr {7} \
-		--test_batch_size 512 \
+		--calibration_temperature {6} \
+		--calibration_domains 1 \
+		--calibration_fraction 1.0 \
+		--calibration_batch_size {7} \
+		--calibration_steps {8} \
+		--calibration_lr {9} \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
 		--test_prior_strength 1 \
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
+		--test_batch_size 512 \
 		--seed 360234358 \
 		--num_workers 48 \
-		::: 64 512 \
-		::: 2048 16384 \
-		::: 1e-4 1e-3 \
-		::: 64 512 \
+		::: Waterbirds \
+		::: ResNet18 \
+		::: 512 \
+		::: 50000 \
+		::: 1e-3 \
 		::: 1 \
-		::: 0 10 100 \
-		::: 1e-4 1e-3
+		::: 512 \
+		::: 0 \
+		::: 0
 
 
 mnist: mnist-default mnist-unconfounded-source mnist-no-calibration mnist-no-fixed-marginal mnist-small-batch mnist-no-rotation

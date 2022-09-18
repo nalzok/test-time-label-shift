@@ -1,4 +1,5 @@
 # Forked from https://github.com/facebookresearch/DomainBed/blob/main/domainbed/datasets.py
+from collections import Counter
 import numpy as np
 import torch
 from torch.utils.data import TensorDataset
@@ -66,10 +67,13 @@ class MultipleDomainMNIST(MultipleDomainDataset):
             conditional = torch.from_numpy(strength * confounder1 + (1-strength) * confounder2)
             domain = self.shift(images, labels, conditional)
 
-            joint = torch.zeros_like(conditional)
-            for label in labels:
-                joint[label] += conditional[label]
+            counter = Counter(labels.numpy())
+            y_count = torch.zeros(C)
+            for label in counter:
+                y_count[label] += counter[label]
+            joint = torch.sum(y_count[:, np.newaxis] * conditional, 0)
             joint /= len(labels)
+
             self.domains.append((joint, domain))
 
 

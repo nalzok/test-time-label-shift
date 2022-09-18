@@ -20,6 +20,7 @@ wilds = "==2.0.0"
 tensorflow-cpu = "*"
 
 [dev-packages]
+black = "*"
 
 [requires]
 python_version = "3.8"

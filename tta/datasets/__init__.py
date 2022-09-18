@@ -20,26 +20,33 @@ class MultipleDomainDataset:
         self.domains: List[Tuple[torch.Tensor, Dataset]] = []
 
 
-def split(dataset: MultipleDomainDataset, train_domains: Set[int],
-          train_fraction: float, calibration_fraction: float,
-          rng: np.random.Generator) -> Tuple[ConcatDataset, ConcatDataset, List[Tuple[torch.Tensor, Dataset]]]:
+def split(dataset: MultipleDomainDataset, train_domains: Set[int], train_fraction: float, train_calibration_fraction: float,
+          calibration_domains: Set[int], calibration_fraction: float, rng: np.random.Generator) \
+                  -> Tuple[ConcatDataset, ConcatDataset, List[Tuple[torch.Tensor, Dataset]]]:
     train_splits = []
-    calibrate_splits = []
+    calibration_splits = []
     test_splits = []
 
     for i, (joint, domain) in enumerate(dataset.domains):
         if i in train_domains:
             # For source domains, we split it into train + calibrate + test
             train, test = split_dataset(domain, int(len(domain)*train_fraction), rng)
-            calibrate, train = split_dataset(train, int(len(domain)*calibration_fraction), rng)
+            calibration, train = split_dataset(train, int(len(domain)*train_calibration_fraction), rng)
+
             train_splits.append(train)
-            calibrate_splits.append(calibrate)
+            calibration_splits.append(calibration)
+            test_splits.append((joint, test))
+        elif i in calibration_domains:
+            # For calibration domains, we split it into calibrate + test
+            calibration, test = split_dataset(domain, int(len(domain)*calibration_fraction), rng)
+
+            calibration_splits.append(calibration)
             test_splits.append((joint, test))
         else:
             # For target domains, all samples are used as test
             test_splits.append((joint, domain))
 
     train = ConcatDataset(train_splits)
-    calibrate = ConcatDataset(calibrate_splits)
+    calibrate = ConcatDataset(calibration_splits)
 
     return train, calibrate, test_splits
