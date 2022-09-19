@@ -43,6 +43,7 @@ sweep:
 		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_model {2} \
+		--train_checkpoint_path pretrained/ResNet50_ImageNet1k \
 		--train_domains 0 \
 		--train_fraction 1.0 \
 		--train_calibration_fraction 0.0 \
@@ -65,14 +66,14 @@ sweep:
 		--seed 360234358 \
 		--num_workers 48 \
 		::: Waterbirds \
-		::: ResNet18 \
+		::: ResNet50 \
 		::: 512 \
-		::: 50000 \
-		::: 1e-3 \
+		::: 5000 \
+		::: 1e-3 1e-4 \
 		::: 1 \
 		::: 512 \
-		::: 0 \
-		::: 0
+		::: 0 500 5000 \
+		::: 1e-3 1e-4
 
 
 mnist: mnist-default mnist-unconfounded-source mnist-no-calibration mnist-no-fixed-marginal mnist-small-batch mnist-no-rotation
