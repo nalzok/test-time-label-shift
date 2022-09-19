@@ -7,7 +7,8 @@ debug:
 		--dataset_name Waterbirds \
 		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
-		--train_model ResNet18 \
+		--train_model ResNet50 \
+		--train_checkpoint_path pretrained/ResNet50_ImageNet1k \
 		--train_domains 0 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.0 \

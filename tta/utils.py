@@ -11,7 +11,7 @@ class Dataset(Dataset):
 
 
 class Tee:
-    def __init__(self, fname, mode="a"):
+    def __init__(self, fname, mode="w"):
         self.stdout = sys.stdout
         self.file = open(fname, mode)
 

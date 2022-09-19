@@ -25,7 +25,6 @@ from .datasets.fast_data_loader import InfiniteDataLoader, FastDataLoader
 from .train import (
     TrainState,
     create_train_state,
-    restore_train_state,
     train_step,
     calibration_step,
     cross_replica_mean,
@@ -33,6 +32,7 @@ from .train import (
     adapt_step,
     test_step,
 )
+from .restore import restore_train_state
 from .utils import Tee
 
 
