@@ -11,14 +11,12 @@ class MultipleDomainWaterbirds(MultipleDomainDataset):
 
     domain_names = ['train', 'val', 'test']
 
-    def __init__(self, root, generator, train_domains):
+    def __init__(self, root, generator):
         input_shape = (1, 224, 224, 3)
         C = 2
         K = 2
         environments = np.array([0, 1, 2])
         super().__init__(input_shape, C, K, environments)
-
-        self.train_domains = train_domains
 
         if root is None:
             raise ValueError('Data directory not specified!')

@@ -10,25 +10,23 @@ debug:
 		--train_model ResNet50 \
 		--train_checkpoint_path pretrained/ResNet50_ImageNet1k \
 		--train_domains 0 \
-		--train_fraction 0.9 \
-		--train_calibration_fraction 0.0 \
+		--train_fraction 1.0 \
+		--train_calibration_fraction 0.1 \
 		--train_batch_size 512 \
-		--train_steps 2000 \
-		--train_lr 1e-3 \
+		--train_steps 0 \
+		--train_lr 0 \
 		--source_prior_estimation induce \
 		--calibration_temperature 1 \
-		--calibration_domains 1 \
-		--calibration_fraction 0.8 \
-		--calibration_batch_size 512 \
-		--calibration_steps 100 \
-		--calibration_lr 1e-3 \
+		--calibration_batch_size 64 \
+		--calibration_steps 0 \
+		--calibration_lr 0 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
 		--test_prior_strength 1 \
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
 		--test_batch_size 512 \
-		--seed 360234358 \
+		--seed 2022 \
 		--num_workers 48
 
 sweep:
@@ -46,14 +44,12 @@ sweep:
 		--train_checkpoint_path pretrained/ResNet50_ImageNet1k \
 		--train_domains 0 \
 		--train_fraction 1.0 \
-		--train_calibration_fraction 0.0 \
+		--train_calibration_fraction 0.1 \
 		--train_batch_size {3} \
 		--train_steps {4} \
 		--train_lr {5} \
 		--source_prior_estimation induce \
 		--calibration_temperature {6} \
-		--calibration_domains 1 \
-		--calibration_fraction 1.0 \
 		--calibration_batch_size {7} \
 		--calibration_steps {8} \
 		--calibration_lr {9} \
@@ -63,17 +59,17 @@ sweep:
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
 		--test_batch_size 512 \
-		--seed 360234358 \
+		--seed 2022 \
 		--num_workers 48 \
 		::: Waterbirds \
 		::: ResNet50 \
 		::: 512 \
-		::: 5000 \
-		::: 1e-3 1e-4 \
+		::: 0 \
+		::: 0 \
 		::: 1 \
-		::: 512 \
-		::: 0 500 5000 \
-		::: 1e-3 1e-4
+		::: 64 \
+		::: 0 \
+		::: 0
 
 
 mnist: mnist-default mnist-unconfounded-source mnist-no-calibration mnist-no-fixed-marginal mnist-small-batch mnist-no-rotation
@@ -104,7 +100,7 @@ mnist-default:
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
 		--plot_title 'Default Setting' \
-		--seed 360234358 \
+		--seed 2022 \
 		--num_workers 48
 
 mnist-unconfounded-source:
@@ -133,7 +129,7 @@ mnist-unconfounded-source:
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
 		--plot_title 'Training on unconfounded source' \
-		--seed 360234358 \
+		--seed 2022 \
 		--num_workers 48
 
 mnist-no-calibration:
@@ -162,7 +158,7 @@ mnist-no-calibration:
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
 		--plot_title 'Without calibration' \
-		--seed 360234358 \
+		--seed 2022 \
 		--num_workers 48
 
 mnist-no-fixed-marginal:
@@ -191,7 +187,7 @@ mnist-no-fixed-marginal:
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
 		--plot_title 'Without fixing p_t(y)' \
-		--seed 360234358 \
+		--seed 2022 \
 		--num_workers 48
 
 mnist-small-batch:
@@ -220,7 +216,7 @@ mnist-small-batch:
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
 		--plot_title 'Using a small batch size of 8' \
-		--seed 360234358 \
+		--seed 2022 \
 		--num_workers 48
 
 mnist-no-rotation:
@@ -249,5 +245,5 @@ mnist-no-rotation:
 		--test_prior_strength 4 \
 		--test_fix_marginal True \
 		--plot_title 'Disabling rotation' \
-		--seed 360234358 \
+		--seed 2022 \
 		--num_workers 48

@@ -65,8 +65,8 @@ Curves = Dict[
     required=True,
 )
 @click.option("--calibration_temperature", type=float, required=True)
-@click.option("--calibration_domains", type=str, required=True)
-@click.option("--calibration_fraction", type=float, required=True)
+@click.option("--calibration_domains", type=str, required=False)
+@click.option("--calibration_fraction", type=float, required=False)
 @click.option("--calibration_batch_size", type=int, required=True)
 @click.option("--calibration_steps", type=int, required=True)
 @click.option("--calibration_lr", type=float, required=True)
@@ -94,8 +94,8 @@ def cli(
     train_lr: float,
     source_prior_estimation: str,
     calibration_temperature: float,
-    calibration_domains: str,
-    calibration_fraction: float,
+    calibration_domains: Optional[str],
+    calibration_fraction: Optional[float],
     calibration_batch_size: int,
     calibration_steps: int,
     calibration_lr: float,
@@ -152,8 +152,8 @@ def main(
     train_lr: float,
     source_prior_estimation: str,
     calibration_temperature: float,
-    calibration_domains: str,
-    calibration_fraction: float,
+    calibration_domains: Optional[str],
+    calibration_fraction: Optional[float],
     calibration_batch_size: int,
     calibration_steps: int,
     calibration_lr: float,
@@ -207,7 +207,13 @@ def main(
         raise NotImplementedError(
             "Training on multiple source distributions is not supported yet."
         )
-    calibration_domains_set = set(int(env) for env in calibration_domains.split(","))
+
+    if calibration_domains is not None:
+        calibration_domains_set = set(int(env) for env in calibration_domains.split(","))
+    else:
+        calibration_domains_set = set()
+    if calibration_fraction is None:
+        calibration_fraction = 1.0
 
     (
         state,
@@ -369,7 +375,7 @@ def train(
         ), "Parameter dataset_label_noise is not supported with Waterbirds"
 
         root = Path("data/")
-        dataset = MultipleDomainWaterbirds(root, generator, train_domains_set)
+        dataset = MultipleDomainWaterbirds(root, generator)
     else:
         raise ValueError(f"Unknown dataset {dataset_name}")
 
