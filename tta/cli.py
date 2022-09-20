@@ -199,7 +199,6 @@ def main(
     np.random.seed(seed)
     torch.manual_seed(seed)
     key = jax.random.PRNGKey(seed)
-    rng = np.random.default_rng(seed)
     generator = torch.Generator().manual_seed(seed)
 
     train_domains_set = set(int(env) for env in train_domains.split(","))
@@ -245,7 +244,6 @@ def main(
         calibration_lr,
         device_count,
         key,
-        rng,
         generator,
         num_workers,
     )
@@ -333,7 +331,6 @@ def train(
     calibration_lr: float,
     device_count: int,
     key: Any,
-    rng: np.random.Generator,
     generator: torch.Generator,
     num_workers: int,
 ) -> Tuple[
@@ -390,7 +387,6 @@ def train(
         train_calibration_fraction,
         calibration_domains_set,
         calibration_fraction,
-        rng,
     )
     print("train", len(train))
     print("calibration", len(calibration))

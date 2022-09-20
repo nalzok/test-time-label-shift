@@ -21,7 +21,7 @@ class MultipleDomainDataset:
 
 
 def split(dataset: MultipleDomainDataset, train_domains: Set[int], train_fraction: float, train_calibration_fraction: float,
-          calibration_domains: Set[int], calibration_fraction: float, rng: np.random.Generator) \
+          calibration_domains: Set[int], calibration_fraction: float) \
                   -> Tuple[ConcatDataset, ConcatDataset, List[Tuple[torch.Tensor, Dataset]]]:
     train_splits = []
     calibration_splits = []
@@ -30,15 +30,15 @@ def split(dataset: MultipleDomainDataset, train_domains: Set[int], train_fractio
     for i, (joint, domain) in enumerate(dataset.domains):
         if i in train_domains:
             # For source domains, we split it into train + calibrate + test
-            train, test = split_dataset(domain, int(len(domain)*train_fraction), rng)
-            calibration, train = split_dataset(train, int(len(domain)*train_calibration_fraction), rng)
+            train, test = split_dataset(domain, int(len(domain)*train_fraction))
+            calibration, train = split_dataset(train, int(len(domain)*train_calibration_fraction))
 
             train_splits.append(train)
             calibration_splits.append(calibration)
             test_splits.append((joint, test))
         elif i in calibration_domains:
             # For calibration domains, we split it into calibrate + test
-            calibration, test = split_dataset(domain, int(len(domain)*calibration_fraction), rng)
+            calibration, test = split_dataset(domain, int(len(domain)*calibration_fraction))
 
             calibration_splits.append(calibration)
             test_splits.append((joint, test))
