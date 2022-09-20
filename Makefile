@@ -13,18 +13,13 @@ debug:
 		--train_fraction 1.0 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 512 \
-		--train_steps 0 \
-		--train_lr 0 \
+		--train_epochs 20 \
+		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_temperature 1 \
 		--calibration_batch_size 64 \
-		--calibration_steps 0 \
-		--calibration_lr 0 \
-		--test_symmetric_dirichlet False \
-		--test_symmetric_dirichlet True \
-		--test_prior_strength 1 \
-		--test_prior_strength 4 \
-		--test_fix_marginal True \
+		--calibration_epochs 2 \
+		--calibration_lr 1e-3 \
 		--test_batch_size 512 \
 		--seed 2022 \
 		--num_workers 48
@@ -46,12 +41,12 @@ sweep:
 		--train_fraction 1.0 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size {3} \
-		--train_steps {4} \
+		--train_epochs {4} \
 		--train_lr {5} \
 		--source_prior_estimation induce \
 		--calibration_temperature {6} \
 		--calibration_batch_size {7} \
-		--calibration_steps {8} \
+		--calibration_epochs {8} \
 		--calibration_lr {9} \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
@@ -64,12 +59,12 @@ sweep:
 		::: Waterbirds \
 		::: ResNet50 \
 		::: 512 \
-		::: 1873 \
+		::: 2000 \
 		::: 1e-3 \
 		::: 1 \
 		::: 64 \
-		::: 0 \
-		::: 0
+		::: 0 100 1000 \
+		::: 1e-3 1e-4
 
 
 mnist: mnist-default mnist-unconfounded-source mnist-no-calibration mnist-no-fixed-marginal mnist-small-batch mnist-no-rotation
@@ -85,13 +80,13 @@ mnist-default:
 		--train_batch_size 64 \
 		--train_fraction 0.8 \
 		--train_model LeNet \
-		--train_steps 16384 \
+		--train_epochs 16384 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 512 \
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
-		--calibration_steps 100 \
+		--calibration_epochs 100 \
 		--calibration_lr 1e-3 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
@@ -114,13 +109,13 @@ mnist-unconfounded-source:
 		--train_batch_size 64 \
 		--train_fraction 0.8 \
 		--train_model LeNet \
-		--train_steps 16384 \
+		--train_epochs 16384 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 512 \
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
-		--calibration_steps 100 \
+		--calibration_epochs 100 \
 		--calibration_lr 1e-3 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
@@ -143,13 +138,13 @@ mnist-no-calibration:
 		--train_batch_size 64 \
 		--train_fraction 0.8 \
 		--train_model LeNet \
-		--train_steps 16384 \
+		--train_epochs 16384 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 512 \
 		--calibration_fraction 0 \
 		--calibration_temperature 1 \
-		--calibration_steps 0 \
+		--calibration_epochs 0 \
 		--calibration_lr 0 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
@@ -172,13 +167,13 @@ mnist-no-fixed-marginal:
 		--train_batch_size 64 \
 		--train_fraction 0.8 \
 		--train_model LeNet \
-		--train_steps 16384 \
+		--train_epochs 16384 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 512 \
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
-		--calibration_steps 100 \
+		--calibration_epochs 100 \
 		--calibration_lr 1e-3 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \
@@ -201,13 +196,13 @@ mnist-small-batch:
 		--train_batch_size 64 \
 		--train_fraction 0.8 \
 		--train_model LeNet \
-		--train_steps 16384 \
+		--train_epochs 16384 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 512 \
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
-		--calibration_steps 100 \
+		--calibration_epochs 100 \
 		--calibration_lr 1e-3 \
 		--test_batch_size 64 \
 		--test_symmetric_dirichlet False \
@@ -230,13 +225,13 @@ mnist-no-rotation:
 		--train_batch_size 64 \
 		--train_fraction 0.8 \
 		--train_model LeNet \
-		--train_steps 16384 \
+		--train_epochs 16384 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_batch_size 512 \
 		--calibration_fraction 0.1 \
 		--calibration_temperature 1 \
-		--calibration_steps 100 \
+		--calibration_epochs 100 \
 		--calibration_lr 1e-3 \
 		--test_batch_size 512 \
 		--test_symmetric_dirichlet False \

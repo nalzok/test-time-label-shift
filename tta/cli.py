@@ -2,7 +2,7 @@ from typing import Any, Sequence, List, Tuple, Set, Dict, Optional
 from pathlib import Path
 import sys
 import random
-from itertools import islice, product
+from itertools import product
 from pprint import pprint
 
 import jax
@@ -12,7 +12,7 @@ import flax
 from flax.jax_utils import replicate, unreplicate
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 import click
 from sklearn.metrics import roc_auc_score
 import matplotlib.pyplot as plt
@@ -21,7 +21,6 @@ from .datasets import split
 from .datasets.mnist import MultipleDomainMNIST
 from .datasets.waterbirds import MultipleDomainWaterbirds
 from .datasets.coco import ColoredCOCO
-from .datasets.fast_data_loader import InfiniteDataLoader, FastDataLoader
 from .train import (
     TrainState,
     create_train_state,
@@ -57,22 +56,22 @@ Curves = Dict[
 @click.option("--train_fraction", type=float, required=True)
 @click.option("--train_calibration_fraction", type=float, required=True)
 @click.option("--train_batch_size", type=int, required=True)
-@click.option("--train_steps", type=int, required=True)
+@click.option("--train_epochs", type=int, required=True)
 @click.option("--train_lr", type=float, required=True)
 @click.option(
     "--source_prior_estimation",
-    type=click.Choice(["count", "induce", "average"]),
+    type=click.Choice(["count", "induce"]),
     required=True,
 )
 @click.option("--calibration_temperature", type=float, required=True)
 @click.option("--calibration_domains", type=str, required=False)
 @click.option("--calibration_fraction", type=float, required=False)
 @click.option("--calibration_batch_size", type=int, required=True)
-@click.option("--calibration_steps", type=int, required=True)
+@click.option("--calibration_epochs", type=int, required=True)
 @click.option("--calibration_lr", type=float, required=True)
-@click.option("--test_symmetric_dirichlet", type=bool, required=True, multiple=True)
-@click.option("--test_prior_strength", type=float, required=True, multiple=True)
-@click.option("--test_fix_marginal", type=bool, required=True, multiple=True)
+@click.option("--test_symmetric_dirichlet", type=bool, required=False, multiple=True)
+@click.option("--test_prior_strength", type=float, required=False, multiple=True)
+@click.option("--test_fix_marginal", type=bool, required=False, multiple=True)
 @click.option("--test_batch_size", type=int, required=True, multiple=True)
 @click.option(
     "--plot_title", type=str, required=False, default="Performance on Each Domain"
@@ -90,14 +89,14 @@ def cli(
     train_fraction: float,
     train_calibration_fraction: float,
     train_batch_size: int,
-    train_steps: int,
+    train_epochs: int,
     train_lr: float,
     source_prior_estimation: str,
     calibration_temperature: float,
     calibration_domains: Optional[str],
     calibration_fraction: Optional[float],
     calibration_batch_size: int,
-    calibration_steps: int,
+    calibration_epochs: int,
     calibration_lr: float,
     test_symmetric_dirichlet: Sequence[bool],
     test_prior_strength: Sequence[float],
@@ -118,14 +117,14 @@ def cli(
         train_fraction,
         train_calibration_fraction,
         train_batch_size,
-        train_steps,
+        train_epochs,
         train_lr,
         source_prior_estimation,
         calibration_temperature,
         calibration_domains,
         calibration_fraction,
         calibration_batch_size,
-        calibration_steps,
+        calibration_epochs,
         calibration_lr,
         test_symmetric_dirichlet,
         test_prior_strength,
@@ -148,14 +147,14 @@ def main(
     train_fraction: float,
     train_calibration_fraction: float,
     train_batch_size: int,
-    train_steps: int,
+    train_epochs: int,
     train_lr: float,
     source_prior_estimation: str,
     calibration_temperature: float,
     calibration_domains: Optional[str],
     calibration_fraction: Optional[float],
     calibration_batch_size: int,
-    calibration_steps: int,
+    calibration_epochs: int,
     calibration_lr: float,
     test_symmetric_dirichlet: Sequence[bool],
     test_prior_strength: Sequence[float],
@@ -233,14 +232,14 @@ def main(
         train_fraction,
         train_calibration_fraction,
         train_batch_size,
-        train_steps,
+        train_epochs,
         train_lr,
         source_prior_estimation,
         calibration_temperature,
         calibration_domains_set,
         calibration_fraction,
         calibration_batch_size,
-        calibration_steps,
+        calibration_epochs,
         calibration_lr,
         device_count,
         key,
@@ -320,14 +319,14 @@ def train(
     train_fraction: float,
     train_calibration_fraction: float,
     train_batch_size: int,
-    train_steps: int,
+    train_epochs: int,
     train_lr: float,
     source_prior_estimation: str,
     calibration_temperature: float,
     calibration_domains_set: Set[int],
     calibration_fraction: float,
     calibration_batch_size: int,
-    calibration_steps: int,
+    calibration_epochs: int,
     calibration_lr: float,
     device_count: int,
     key: Any,
@@ -413,81 +412,66 @@ def train(
     state: TrainState = replicate(state)
 
     print("===> Training")
-    inf_train_loader = InfiniteDataLoader(
-        train, train_batch_size, num_workers, generator
-    )
-    for step, (X, Y, Z) in enumerate(islice(inf_train_loader, train_steps)):
-        X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
-        Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
-        Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
-        M = Y * K + Z
+    train_loader = DataLoader(train, train_batch_size, shuffle=True, num_workers=num_workers, generator=generator)
+    for epoch in range(train_epochs):
+        epoch_loss = 0
+        for X, Y, Z in train_loader:
+            remainder = X.shape[0] % device_count
+            X = X[remainder:]
+            Y = Y[remainder:]
+            Z = Z[remainder:]
 
-        state, loss = train_step(state, X, M)
-        # if step % (train_steps // 21 + 1) == 0:
-        with jnp.printoptions(precision=3):
-            print(f"Train step {step + 1}, loss: {unreplicate(loss)}")
-
-    # Sync the batch statistics across replicas so that evaluation is deterministic.
-    state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
-
-    print("===> Calibrating")
-    if len(calibration) or calibration_steps:
-        inf_calibration_loader = InfiniteDataLoader(
-            calibration, calibration_batch_size, num_workers, generator
-        )
-        for step, (X, Y, Z) in enumerate(
-            islice(inf_calibration_loader, calibration_steps)
-        ):
             X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
             Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
             Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
             M = Y * K + Z
 
-            state, loss = calibration_step(state, X, M, calibration_lr)
-            if step % (calibration_steps // 21 + 1) == 0:
-                with jnp.printoptions(precision=3):
-                    print(f"Calibration step {step + 1}, loss: {unreplicate(loss)}")
+            state, loss = train_step(state, X, M)
+            epoch_loss += unreplicate(loss)
+
+        with jnp.printoptions(precision=3):
+            print(f"Train epoch {epoch + 1}, loss: {epoch_loss}")
+
+    # Sync the batch statistics across replicas so that evaluation is deterministic.
+    state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
+
+    print("===> Calibrating")
+    if len(calibration) or calibration_epochs:
+        calibration_loader = DataLoader(calibration, calibration_batch_size, shuffle=True, num_workers=num_workers, generator=generator)
+        for epoch in range(calibration_epochs):
+            epoch_loss = 0
+            for X, Y, Z in calibration_loader:
+                remainder = X.shape[0] % device_count
+                X = X[remainder:]
+                Y = Y[remainder:]
+                Z = Z[remainder:]
+
+                X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
+                Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
+                Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
+                M = Y * K + Z
+
+                state, loss = calibration_step(state, X, M, calibration_lr)
+                epoch_loss += unreplicate(loss)
+
+            with jnp.printoptions(precision=3):
+                print(f"Calibration epoch {epoch + 1}, loss: {epoch_loss}")
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
 
     print("===> Estimating Source Label Prior")
-    if source_prior_estimation == "average":
-        source_prior_count = estimate_source_prior(
-            train,
-            train_batch_size,
-            num_workers,
-            generator,
-            C,
-            K,
-            device_count,
-            state,
-            "count",
-        )
-        source_prior_induce = estimate_source_prior(
-            train,
-            train_batch_size,
-            num_workers,
-            generator,
-            C,
-            K,
-            device_count,
-            state,
-            "induce",
-        )
-        source_prior = (source_prior_count + source_prior_induce) / 2
-    else:
-        source_prior = estimate_source_prior(
-            train,
-            train_batch_size,
-            num_workers,
-            generator,
-            C,
-            K,
-            device_count,
-            state,
-            source_prior_estimation,
-        )
+    source_prior = estimate_source_prior(
+        train,
+        train_batch_size,
+        num_workers,
+        generator,
+        C,
+        K,
+        device_count,
+        state,
+        source_prior_estimation,
+    )
 
     prior = state.prior.unfreeze()
     prior["source"] = source_prior
@@ -523,21 +507,21 @@ def train(
         auc = hits = norm = 0
         joint = jnp.array(joint)
 
-        # batch size should not matter since we are not doing adaptation
-        eval_loader = FastDataLoader(eval_, train_batch_size, num_workers, generator)
+        # batch size does not matter since we are not doing adaptation
+        # using shuffle=True so that Y contains multiple classes, otherwise AUC is not defined
+        eval_loader = DataLoader(eval_, train_batch_size, shuffle=True, num_workers=num_workers, generator=generator)
         for X, Y, _ in eval_loader:
             remainder = X.shape[0] % device_count
-            if remainder != 0:
-                X = X[:-remainder]
-                Y = Y[:-remainder]
+            X = X[remainder:]
+            Y = Y[remainder:]
 
             N = X.shape[0]
             X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
             Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
 
-            log_prob_ratio, hit = test_step(state, X, Y)
+            score, hit = test_step(state, X, Y)
 
-            auc += N * roc_auc_score(Y.flatten(), log_prob_ratio.flatten())
+            auc += N * roc_auc_score(Y.flatten(), score.flatten())
             hits += unreplicate(hit)
             prior = unreplicate(state.prior["target"]).reshape((C, K))
             norm += N * jnp.linalg.norm(prior - joint)
@@ -616,12 +600,12 @@ def adapt(
         auc = hits = norm = 0
         joint = jnp.array(joint)
 
-        eval_loader = FastDataLoader(eval_, batch_size, num_workers, generator)
+        # using shuffle=True so that Y contains multiple classes, otherwise AUC is not defined
+        eval_loader = DataLoader(eval_, batch_size, shuffle=True, num_workers=num_workers, generator=generator)
         for X, Y, _ in eval_loader:
             remainder = X.shape[0] % device_count
-            if remainder != 0:
-                X = X[:-remainder]
-                Y = Y[:-remainder]
+            X = X[remainder:]
+            Y = Y[remainder:]
 
             N = X.shape[0]
             X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
@@ -630,9 +614,9 @@ def adapt(
             state = adapt_step(
                 state, X, C, K, symmetric_dirichlet, prior_strength, fix_marginal
             )
-            log_prob_ratio, hit = test_step(state, X, Y)
+            score, hit = test_step(state, X, Y)
 
-            auc += N * roc_auc_score(Y.flatten(), log_prob_ratio.flatten())
+            auc += N * roc_auc_score(Y.flatten(), score.flatten())
             hits += unreplicate(hit)
             prior = unreplicate(state.prior["target"]).reshape((C, K))
             norm += N * jnp.linalg.norm(prior - joint)
@@ -671,7 +655,7 @@ def estimate_source_prior(
     state: TrainState,
     method: str,
 ) -> jnp.ndarray:
-    train_loader = FastDataLoader(train, train_batch_size, num_workers, generator)
+    train_loader = DataLoader(train, train_batch_size, shuffle=False, num_workers=num_workers, generator=generator)
     if method == "count":
         source_prior = np.zeros((C * K))
         I = np.identity(C * K)
@@ -686,8 +670,7 @@ def estimate_source_prior(
         source_prior = jnp.zeros((device_count, C * K))
         for X, _, _ in train_loader:
             remainder = X.shape[0] % device_count
-            if remainder != 0:
-                X = X[:-remainder]
+            X = X[remainder:]
 
             N += X.shape[0]
             X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])

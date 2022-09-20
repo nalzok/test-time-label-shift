@@ -196,8 +196,8 @@ def test_step(state: TrainState, image: jnp.ndarray, label: jnp.ndarray) -> Tupl
         'prior': state.prior
     }
     target_prob = state.apply_fn(variables, image, False)
-    log_prob_ratio = target_prob[:, 1]      # assumes binary label
+    score = target_prob[:, 1]   # assumes binary label
     prediction = jnp.argmax(target_prob, axis=-1)
     hit = jax.lax.psum(jnp.sum(prediction == label), axis_name='batch')
 
-    return log_prob_ratio, hit
+    return score, hit
