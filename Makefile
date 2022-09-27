@@ -31,7 +31,7 @@ sweep:
 		--joblog joblog.txt \
 		pipenv run python3 \
 		-m tta.cli \
-		--config_name sweep_{1}_{2}_Tbatch{3}_Tsteps{4}_Tlr{5}_temp{6}_Cbatch{7}_Csteps{8}_Clr{9} \
+		--config_name sweep_{1}_{2}_Tbatch{3}_Tepochs{4}_Tlr{5}_temp{6}_Cbatch{7}_Cepochs{8}_Clr{9}_seed{10} \
 		--dataset_name {1} \
 		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
@@ -48,23 +48,19 @@ sweep:
 		--calibration_batch_size {7} \
 		--calibration_epochs {8} \
 		--calibration_lr {9} \
-		--test_symmetric_dirichlet False \
-		--test_symmetric_dirichlet True \
-		--test_prior_strength 1 \
-		--test_prior_strength 4 \
-		--test_fix_marginal True \
 		--test_batch_size 512 \
-		--seed 2022 \
+		--seed {10} \
 		--num_workers 48 \
 		::: Waterbirds \
 		::: ResNet50 \
 		::: 512 \
-		::: 2000 \
+		::: 100 200 \
 		::: 1e-3 \
 		::: 1 \
-		::: 64 \
-		::: 0 100 1000 \
-		::: 1e-3 1e-4
+		::: 512 \
+		::: 0 \
+		::: 0 \
+		::: 2022 2023 2024 2025 2026 2027 2028 2029 2030 2031
 
 
 mnist: mnist-default mnist-unconfounded-source mnist-no-calibration mnist-no-fixed-marginal mnist-small-batch mnist-no-rotation
