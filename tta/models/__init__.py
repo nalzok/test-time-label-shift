@@ -50,11 +50,13 @@ class AdaptiveNN(nn.Module):
 
     def adapted_prob(self, x, train: bool):
         logit = self.calibrated_logit(x, train)
-        prob = jax.nn.softmax(logit)
 
         # adaptation
         w = self.target_prior.value / self.source_prior.value
-        prob = w * prob
+        logit_max = jnp.max(logit, axis=-1, keepdims=True)
+        unnormalized = w * jnp.exp(logit - jax.lax.stop_gradient(logit_max))
+        prob = unnormalized / jnp.sum(unnormalized, axis=-1, keepdims=True)
+
         prob = prob.reshape((-1, self.C, self.K))
         prob = jnp.sum(prob, axis=-1)
 

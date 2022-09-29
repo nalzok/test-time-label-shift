@@ -1,4 +1,4 @@
-from typing import Any, Sequence, List, Tuple, Set, Dict, Optional
+from typing import Any, Sequence, List, Tuple, Set, Dict, Optional, Union
 from pathlib import Path
 import sys
 import random
@@ -163,7 +163,7 @@ def main(
     plot_title: str,
     seed: int,
     num_workers: int,
-) -> Tuple[Curves, Curves, Curves]:
+) -> Tuple[Curves, Curves, Curves, Curves]:
     log_root = Path("logs/")
     plot_root = Path("plots/")
     npz_root = Path("npz/")
@@ -175,9 +175,12 @@ def main(
     log_path = log_root / f"{config_name}.txt"
     sys.stdout = Tee(log_path)
 
+    l1_plot_path = plot_root / f"{config_name}_l1.png"
     auc_plot_path = plot_root / f"{config_name}_auc.png"
     accuracy_plot_path = plot_root / f"{config_name}_accuracy.png"
     norm_plot_path = plot_root / f"{config_name}_norm.png"
+
+    l1_npz_path = npz_root / f"{config_name}_l1.npz"
     auc_npz_path = npz_root / f"{config_name}_auc.npz"
     accuracy_npz_path = npz_root / f"{config_name}_accuracy.npz"
     norm_npz_path = npz_root / f"{config_name}_norm.npz"
@@ -217,8 +220,9 @@ def main(
         state,
         C,
         K,
-        environments,
+        confounder_strength,
         eval_splits,
+        unadapted_l1_sweep,
         unadapted_auc_sweep,
         unadapted_accuracy_sweep,
         unadapted_norm_sweep,
@@ -246,6 +250,7 @@ def main(
         generator,
         num_workers,
     )
+    l1_sweeps: Curves = {("Unadapted", (None, None, None, None)): unadapted_l1_sweep}
     auc_sweeps: Curves = {("Unadapted", (None, None, None, None)): unadapted_auc_sweep}
     accuracy_sweeps: Curves = {
         ("Unadapted", (None, None, None, None)): unadapted_accuracy_sweep
@@ -263,10 +268,11 @@ def main(
         label = (
             f"{symmetric_dirichlet=}, {prior_strength=}, {fix_marginal=}, {batch_size=}"
         )
-        state, auc_sweep, accuracy_sweep, norm_sweep = adapt(
+        state, l1_sweep, auc_sweep, accuracy_sweep, norm_sweep = adapt(
             state,
             C,
             K,
+            dataset_label_noise,
             train_domains_set,
             calibration_domains_set,
             eval_splits,
@@ -280,10 +286,13 @@ def main(
             num_workers,
         )
         key = label, (symmetric_dirichlet, prior_strength, fix_marginal, batch_size)
+        l1_sweeps[key] = l1_sweep
         auc_sweeps[key] = auc_sweep
         accuracy_sweeps[key] = accuracy_sweep
         norm_sweeps[key] = norm_sweep
 
+    print("===> l1_sweeps")
+    pprint(l1_sweeps)
     print("===> auc_sweeps")
     pprint(auc_sweeps)
     print("===> accuracy_sweeps")
@@ -291,22 +300,24 @@ def main(
     print("===> norm_sweeps")
     pprint(norm_sweeps)
 
+    jnp.savez(l1_npz_path, **{k: v for (k, _), v in l1_sweeps.items()})
     jnp.savez(auc_npz_path, **{k: v for (k, _), v in auc_sweeps.items()})
     jnp.savez(accuracy_npz_path, **{k: v for (k, _), v in accuracy_sweeps.items()})
     jnp.savez(norm_npz_path, **{k: v for (k, _), v in norm_sweeps.items()})
 
-    plot_auc(auc_sweeps, environments, train_domains_set, plot_title, auc_plot_path)
+    plot_l1(l1_sweeps, confounder_strength, train_domains_set, plot_title, l1_plot_path)
+    plot_auc(auc_sweeps, confounder_strength, train_domains_set, plot_title, auc_plot_path)
     plot_accuracy(
         accuracy_sweeps,
-        environments,
+        confounder_strength,
         train_domains_set,
         dataset_label_noise,
         plot_title,
         accuracy_plot_path,
     )
-    plot_norm(norm_sweeps, environments, train_domains_set, plot_title, norm_plot_path)
+    plot_norm(norm_sweeps, confounder_strength, train_domains_set, plot_title, norm_plot_path)
 
-    return auc_sweeps, accuracy_sweeps, norm_sweeps
+    return l1_sweeps, auc_sweeps, accuracy_sweeps, norm_sweeps
 
 
 def train(
@@ -338,6 +349,7 @@ def train(
     int,
     np.ndarray,
     List[Tuple[torch.Tensor, Dataset]],
+    jnp.ndarray,
     jnp.ndarray,
     jnp.ndarray,
     jnp.ndarray,
@@ -390,10 +402,10 @@ def train(
     print("train", len(train))
     print("calibration", len(calibration))
     train_domain = next(iter(train_domains_set))
-    print(f"test_splits[{train_domain}][1]", len(test_splits[train_domain][1]))
+    print(f"test_splits[{train_domain}][-1]", len(test_splits[train_domain][-1]))
 
     eval_splits = test_splits.copy()
-    eval_splits.append((test_splits[train_domain][0], train))
+    eval_splits.append((*test_splits[train_domain][:-1], train))
 
     key_init, key = jax.random.split(key)
     specimen = jnp.empty(dataset.input_shape)
@@ -415,7 +427,7 @@ def train(
     train_loader = DataLoader(train, train_batch_size, shuffle=True, num_workers=num_workers, generator=generator)
     for epoch in range(train_epochs):
         epoch_loss = 0
-        for X, Y, Z in train_loader:
+        for X, _, Y, Z in train_loader:
             remainder = X.shape[0] % device_count
             X = X[remainder:]
             Y = Y[remainder:]
@@ -440,7 +452,7 @@ def train(
         calibration_loader = DataLoader(calibration, calibration_batch_size, shuffle=True, num_workers=num_workers, generator=generator)
         for epoch in range(calibration_epochs):
             epoch_loss = 0
-            for X, Y, Z in calibration_loader:
+            for X, _, Y, Z in calibration_loader:
                 remainder = X.shape[0] % device_count
                 X = X[remainder:]
                 Y = Y[remainder:]
@@ -479,79 +491,17 @@ def train(
 
     print("===> Adapting & Evaluating")
 
+    # batch size does not matter since we are not doing adaptation
     label = "Unadapted"
-    print(f"---> {label}")
-    prior = state.prior.unfreeze()
-    prior["target"] = prior["source"]
-    state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
-
-    auc_sweep = jnp.empty(len(eval_splits))
-    accuracy_sweep = jnp.empty(len(eval_splits))
-    norm_sweep = jnp.empty(len(eval_splits))
-    for i, (joint, eval_) in enumerate(eval_splits):
-        # happens on the source domain when train_fraction = 1.0
-        if len(eval_) == 0:
-            auc_sweep = auc_sweep.at[i].set(jnp.nan)
-            accuracy_sweep = accuracy_sweep.at[i].set(jnp.nan)
-            norm_sweep = norm_sweep.at[i].set(jnp.nan)
-            continue
-
-        seen = (
-            "  (seen)"
-            if i in train_domains_set.union(calibration_domains_set)
-            else " (train)"
-            if i == len(eval_splits) - 1
-            else "(unseen)"
-        )
-
-        auc = hits = norm = 0
-        joint = jnp.array(joint)
-
-        # batch size does not matter since we are not doing adaptation
-        # using shuffle=True so that Y contains multiple classes, otherwise AUC is not defined
-        eval_loader = DataLoader(eval_, train_batch_size, shuffle=True, num_workers=num_workers, generator=generator)
-        for X, Y, _ in eval_loader:
-            remainder = X.shape[0] % device_count
-            X = X[remainder:]
-            Y = Y[remainder:]
-
-            N = X.shape[0]
-            X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
-            Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
-
-            score, hit = test_step(state, X, Y)
-
-            auc += N * roc_auc_score(Y.flatten(), score.flatten())
-            hits += unreplicate(hit)
-            prior = unreplicate(state.prior["target"]).reshape((C, K))
-            norm += N * jnp.linalg.norm(prior - joint)
-
-        auc = auc / len(eval_)
-        accuracy = hits / len(eval_)
-        norm = norm / len(eval_)
-
-        with jnp.printoptions(precision=4):
-            print(
-                f"[{label}] Environment {i:>2} {seen} AUC {auc}, Accuracy {accuracy}, Norm {norm}"
-            )
-
-        # note that auc/accuracy/norm_sweep.at[-1] is the training auc/accuracy/norm
-        auc_sweep = auc_sweep.at[i].set(auc)
-        accuracy_sweep = accuracy_sweep.at[i].set(accuracy)
-        norm_sweep = norm_sweep.at[i].set(norm)
-
-    print(
-        f"[{label}] Average AUC {jnp.nanmean(auc_sweep[:-1])}, "
-        f"Accuracy {jnp.nanmean(accuracy_sweep[:-1])}, "
-        f"Norm {jnp.nanmean(norm_sweep[:-1])}"
-    )
+    state, l1_sweep, auc_sweep, accuracy_sweep, norm_sweep = adapt(state, C, K, dataset_label_noise, train_domains_set, calibration_domains_set, eval_splits, None, None, None, train_batch_size, label, device_count, generator, num_workers)
 
     return (
         state,
         C,
         K,
-        dataset.environments,
+        dataset.confounder_strength,
         eval_splits,
+        l1_sweep,
         auc_sweep,
         accuracy_sweep,
         norm_sweep,
@@ -562,28 +512,29 @@ def adapt(
     state: TrainState,
     C: int,
     K: int,
+    dataset_label_noise: float,
     train_domains_set: Set[int],
     calibration_domains_set: Set[int],
     eval_splits: Sequence[Tuple[torch.Tensor, Dataset]],
-    symmetric_dirichlet: bool,
-    prior_strength: float,
-    fix_marginal: bool,
+    symmetric_dirichlet: Optional[bool],
+    prior_strength: Optional[float],
+    fix_marginal: Optional[bool],
     batch_size: int,
     label: str,
     device_count: int,
     generator: torch.Generator,
     num_workers: int,
-) -> Tuple[TrainState, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-
+) -> Tuple[TrainState, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     print(f"---> {label}")
-    prior_strength = replicate(prior_strength)
 
+    l1_sweep = jnp.empty(len(eval_splits))
     auc_sweep = jnp.empty(len(eval_splits))
     accuracy_sweep = jnp.empty(len(eval_splits))
     norm_sweep = jnp.empty(len(eval_splits))
-    for i, (joint, eval_) in enumerate(eval_splits):
-        # happens on the source domain when train_fraction = 1
+    for i, (joint_YZ, eval_) in enumerate(eval_splits):
+        # happens on the source domain when train_fraction = 1.0
         if len(eval_) == 0:
+            l1_sweep = l1_sweep.at[i].set(jnp.nan)
             auc_sweep = auc_sweep.at[i].set(jnp.nan)
             accuracy_sweep = accuracy_sweep.at[i].set(jnp.nan)
             norm_sweep = norm_sweep.at[i].set(jnp.nan)
@@ -597,51 +548,72 @@ def adapt(
             else "(unseen)"
         )
 
-        auc = hits = norm = 0
-        joint = jnp.array(joint)
+        joint_YZ = jnp.array(joint_YZ)
+        flip_prob = jnp.array([
+            [1 - dataset_label_noise, dataset_label_noise],
+            [dataset_label_noise, 1 - dataset_label_noise],
+        ])
+        joint = flip_prob[:, :, jnp.newaxis] * joint_YZ     # P(Y_tilde, Y, Z)
+        prob = joint / jnp.sum(joint, axis=1, keepdims=True)
+        prob = prob[:, 1, :]    # P(Y=1|Y_tilde, Z)
 
         # using shuffle=True so that Y contains multiple classes, otherwise AUC is not defined
+        l1 = auc = hits = norm = 0
         eval_loader = DataLoader(eval_, batch_size, shuffle=True, num_workers=num_workers, generator=generator)
-        for X, Y, _ in eval_loader:
+        for X, Y_tilde, Y, Z in eval_loader:
             remainder = X.shape[0] % device_count
             X = X[remainder:]
+            Y_tilde = Y_tilde[remainder:]
             Y = Y[remainder:]
+            Z = Z[remainder:]
 
             N = X.shape[0]
             X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
+            Y_tilde = jnp.array(Y_tilde)
             Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
+            Z = jnp.array(Z)
 
-            state = adapt_step(
-                state, X, C, K, symmetric_dirichlet, prior_strength, fix_marginal
-            )
+            if symmetric_dirichlet is not None and prior_strength is not None and fix_marginal is not None:
+                state = adapt_step(
+                    state, X, C, K, symmetric_dirichlet, replicate(prior_strength), fix_marginal
+                )
+            else:
+                prior = state.prior.unfreeze()
+                prior["target"] = prior["source"]
+                state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
+
             score, hit = test_step(state, X, Y)
 
+            l1 += jnp.sum(jnp.abs(score.flatten() - prob[Y_tilde, Z]))
             auc += N * roc_auc_score(Y.flatten(), score.flatten())
             hits += unreplicate(hit)
             prior = unreplicate(state.prior["target"]).reshape((C, K))
-            norm += N * jnp.linalg.norm(prior - joint)
+            norm += N * jnp.linalg.norm(prior - joint_YZ)
 
+        l1 = l1 / len(eval_)
         auc = auc / len(eval_)
         accuracy = hits / len(eval_)
         norm = norm / len(eval_)
 
         with jnp.printoptions(precision=4):
             print(
-                f"[{label}] Environment {i:>2} {seen} AUC {auc}, Accuracy {accuracy}, Norm {norm}"
+                f"[{label}] Environment {i:>2} {seen} L1 {l1}, AUC {auc}, Accuracy {accuracy}, Norm {norm}"
             )
 
         # note that auc/accuracy/norm_sweep.at[-1] is the training auc/accuracy/norm
+        l1_sweep = l1_sweep.at[i].set(l1)
         auc_sweep = auc_sweep.at[i].set(auc)
         accuracy_sweep = accuracy_sweep.at[i].set(accuracy)
         norm_sweep = norm_sweep.at[i].set(norm)
 
     print(
-        f"[{label}] Average AUC {jnp.nanmean(auc_sweep[:-1])}, "
+        f"[{label}] Average L1 {jnp.nanmean(l1_sweep[:-1])}, "
+        f"Average AUC {jnp.nanmean(auc_sweep[:-1])}, "
         f"Accuracy {jnp.nanmean(accuracy_sweep[:-1])}, "
         f"Norm {jnp.nanmean(norm_sweep[:-1])}"
     )
 
-    return state, auc_sweep, accuracy_sweep, norm_sweep
+    return state, l1_sweep, auc_sweep, accuracy_sweep, norm_sweep
 
 
 def estimate_source_prior(
@@ -659,7 +631,7 @@ def estimate_source_prior(
     if method == "count":
         source_prior = np.zeros((C * K))
         I = np.identity(C * K)
-        for _, Y, Z in train_loader:
+        for _, _, Y, Z in train_loader:
             M = Y * K + Z
             source_prior += np.sum(I[M], axis=0)
 
@@ -668,7 +640,7 @@ def estimate_source_prior(
     elif method == "induce":
         N = 0
         source_prior = jnp.zeros((device_count, C * K))
-        for X, _, _ in train_loader:
+        for X, _, _, _ in train_loader:
             remainder = X.shape[0] % device_count
             X = X[remainder:]
 
@@ -684,9 +656,38 @@ def estimate_source_prior(
     return source_prior
 
 
+def plot_l1(
+    l1_sweeps: Curves,
+    confounder_strength: np.ndarray,
+    train_domains_set: Set[int],
+    plot_title: str,
+    plot_path: Path,
+):
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    l1_sweep = l1_sweeps.pop(("Unadapted", (None, None, None, None)))
+    ax.plot(confounder_strength, l1_sweep[:-1], linestyle="--", label="Unadapted")
+
+    for (label, _), l1_sweep in l1_sweeps.items():
+        ax.plot(confounder_strength, l1_sweep[:-1], label=label)
+
+    for i in train_domains_set:
+        ax.axvline(confounder_strength[i], linestyle=":")
+
+    plt.ylim((0, 1))
+    plt.xlabel("Shift parameter")
+    plt.ylabel("Average L1 error of class 1")
+    plt.title(plot_title)
+    plt.grid(True)
+    plt.legend()
+
+    plt.savefig(plot_path, dpi=300)
+    plt.close(fig)
+
+
 def plot_auc(
     auc_sweeps: Curves,
-    environments: np.ndarray,
+    confounder_strength: np.ndarray,
     train_domains_set: Set[int],
     plot_title: str,
     plot_path: Path,
@@ -694,13 +695,13 @@ def plot_auc(
     fig, ax = plt.subplots(figsize=(12, 6))
 
     auc_sweep = auc_sweeps.pop(("Unadapted", (None, None, None, None)))
-    ax.plot(environments, auc_sweep[:-1], linestyle="--", label="Unadapted")
+    ax.plot(confounder_strength, auc_sweep[:-1], linestyle="--", label="Unadapted")
 
     for (label, _), auc_sweep in auc_sweeps.items():
-        ax.plot(environments, auc_sweep[:-1], label=label)
+        ax.plot(confounder_strength, auc_sweep[:-1], label=label)
 
     for i in train_domains_set:
-        ax.axvline(environments[i], linestyle=":")
+        ax.axvline(confounder_strength[i], linestyle=":")
 
     plt.ylim((0, 1))
     plt.xlabel("Shift parameter")
@@ -709,35 +710,32 @@ def plot_auc(
     plt.grid(True)
     plt.legend()
 
-    plt.savefig(plot_path)
+    plt.savefig(plot_path, dpi=300)
     plt.close(fig)
 
 
 def plot_accuracy(
     accuracy_sweeps: Curves,
-    environments: np.ndarray,
+    confounder_strength: np.ndarray,
     train_domains_set: Set[int],
-    train_label_noise: float,
+    dataset_label_noise: float,
     plot_title: str,
     plot_path: Path,
 ):
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    if train_label_noise > 0:
-        upper_bound = np.maximum(
-            np.maximum(1 - environments, environments),
-            (1 - train_label_noise) * np.ones_like(environments),
-        )
-        ax.plot(environments, upper_bound, linestyle=":", label="Upper bound")
+    if dataset_label_noise > 0:
+        upper_bound = bayes_accuracy(dataset_label_noise, confounder_strength)
+        ax.plot(confounder_strength, upper_bound, color="grey", linestyle=":", label="Upper bound")
 
     accuracy_sweep = accuracy_sweeps.pop(("Unadapted", (None, None, None, None)))
-    ax.plot(environments, accuracy_sweep[:-1], linestyle="--", label="Unadapted")
+    ax.plot(confounder_strength, accuracy_sweep[:-1], linestyle="--", label="Unadapted")
 
     for (label, _), accuracy_sweep in accuracy_sweeps.items():
-        ax.plot(environments, accuracy_sweep[:-1], label=label)
+        ax.plot(confounder_strength, accuracy_sweep[:-1], label=label)
 
     for i in train_domains_set:
-        ax.axvline(environments[i], linestyle=":")
+        ax.axvline(confounder_strength[i], linestyle=":")
 
     plt.ylim((0, 1))
     plt.xlabel("Shift parameter")
@@ -746,13 +744,13 @@ def plot_accuracy(
     plt.grid(True)
     plt.legend()
 
-    plt.savefig(plot_path)
+    plt.savefig(plot_path, dpi=300)
     plt.close(fig)
 
 
 def plot_norm(
     norm_sweeps: Curves,
-    environments: np.ndarray,
+    confounder_strength: np.ndarray,
     train_domains_set: Set[int],
     plot_title: str,
     plot_path: Path,
@@ -760,13 +758,13 @@ def plot_norm(
     fig, ax = plt.subplots(figsize=(12, 6))
 
     norm_sweep = norm_sweeps.pop(("Unadapted", (None, None, None, None)))
-    ax.plot(environments, norm_sweep[:-1], linestyle="--", label="Unadapted")
+    ax.plot(confounder_strength, norm_sweep[:-1], linestyle="--", label="Unadapted")
 
     for (label, _), norm_sweep in norm_sweeps.items():
-        ax.plot(environments, norm_sweep[:-1], label=label)
+        ax.plot(confounder_strength, norm_sweep[:-1], label=label)
 
     for i in train_domains_set:
-        ax.axvline(environments[i], linestyle=":")
+        ax.axvline(confounder_strength[i], linestyle=":")
 
     plt.ylim((0, 1))
     plt.xlabel("Shift parameter")
@@ -775,8 +773,16 @@ def plot_norm(
     plt.grid(True)
     plt.legend()
 
-    plt.savefig(plot_path)
+    plt.savefig(plot_path, dpi=300)
     plt.close(fig)
+
+
+def bayes_accuracy(dataset_label_noise: float, confounder_strength: Union[float, np.ndarray]) -> np.ndarray:
+    upper_bound = np.maximum(
+        np.maximum(1 - confounder_strength, confounder_strength),
+        (1 - dataset_label_noise) * np.ones_like(confounder_strength),
+    )
+    return upper_bound
 
 
 if __name__ == "__main__":

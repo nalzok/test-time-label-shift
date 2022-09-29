@@ -15,8 +15,8 @@ class MultipleDomainWaterbirds(MultipleDomainDataset):
         input_shape = (1, 224, 224, 3)
         C = 2
         K = 2
-        environments = np.array([0, 1, 2])
-        super().__init__(input_shape, C, K, environments)
+        confounder_strength = np.array([0, 1, 2])
+        super().__init__(input_shape, C, K, confounder_strength)
 
         if root is None:
             raise ValueError('Data directory not specified!')
@@ -54,7 +54,7 @@ class MultipleDomainWaterbirds(MultipleDomainDataset):
             permute,
         ])
 
-        for env in self.environments:
+        for env in self.confounder_strength:
             conditional = torch.from_numpy(conditionals[env])
             domain_name = self.domain_names[env]
             transform = random_transform if domain_name == 'train' else deterministic_transform
@@ -64,7 +64,7 @@ class MultipleDomainWaterbirds(MultipleDomainDataset):
             y_count = torch.zeros(C)
             for label in counter:
                 y_count[label] += counter[label]
-            joint = torch.sum(y_count[:, np.newaxis] * conditional, 0)
-            joint /= len(domain)
+            y_freq = y_count / len(domain)
+            joint_YZ = y_freq[:, np.newaxis] * conditional
 
-            self.domains.append((joint, domain))
+            self.domains.append((joint_YZ, domain))

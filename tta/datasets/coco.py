@@ -13,34 +13,37 @@ from . import MultipleDomainDataset
 
 
 class ColoredCOCO(MultipleDomainDataset):
-    categories = [
-        'boat',
-        'airplane',
-        'truck',
-        'dog',
-        'zebra',
-        'horse',
-        'bird',
-        'train',
-        'bus',
-    ]
-
-    backgrounds = [
-        (  0, 100,   0),
-        (188, 143, 143),
-        (255,   0,   0),
-        (255, 215,   0),
-        (  0, 255,   0),
-        ( 65, 105, 225),
-        (  0, 225, 225),
-        (  0,   0, 255),
-        (255,  20, 147),
-    ]
-
-    environments = [0.9, 0.8, 0.1]
-
     def __init__(self, root: Path, annFile: Path, generator: torch.Generator):
-        super().__init__((1, 64, 64, 3))
+        self.categories = [
+            'boat',
+            'airplane',
+            'truck',
+            'dog',
+            'zebra',
+            'horse',
+            'bird',
+            'train',
+            'bus',
+        ]
+
+        self.backgrounds = [
+            (  0, 100,   0),
+            (188, 143, 143),
+            (255,   0,   0),
+            (255, 215,   0),
+            (  0, 255,   0),
+            ( 65, 105, 225),
+            (  0, 225, 225),
+            (  0,   0, 255),
+            (255,  20, 147),
+        ]
+
+        input_shape = (1, 64, 64, 3)
+        C = len(self.categories)
+        K = len(self.backgrounds)
+        confounder_strength = np.array([0.9, 0.8, 0.1])
+        super().__init__(input_shape, C, K, confounder_strength)
+
         if root is None:
             raise ValueError('Data directory not specified!')
 
@@ -67,18 +70,16 @@ class ColoredCOCO(MultipleDomainDataset):
 
         shuffle = torch.randperm(len(self.image_ids), generator=generator)
 
-        num_categories = len(self.categories)
-        num_classes = len(self.backgrounds)
-        independent = np.ones((num_categories, num_classes)) * 1/num_classes
-        confounding1 = np.eye(num_categories, num_classes)
+        independent = np.ones((C, K)) * 1/K
+        confounding1 = np.eye(C, K)
         confounding1 = 0.75 * confounding1 + 0.25 * independent
         confounding2 = np.roll(confounding1, shift=1, axis=1)
 
-        for i, strength in enumerate(self.environments):
-            indices = shuffle[i::len(self.environments)]
+        for i, strength in enumerate(self.confounder_strength):
+            indices = shuffle[i::len(self.confounder_strength)]
             prob = torch.from_numpy(strength * confounding1 + (1-strength) * confounding2)
             domain = self.dataset_transform(indices, prob)
-            self.domains.append(domain)
+            self.domains.append((prob, domain))     # FIXME: prob should be joint
 
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         print(f'Saving cached datasets to {cache_file}')
@@ -130,4 +131,4 @@ class ColoredCOCO(MultipleDomainDataset):
         Y = torch.Tensor(Y).long()
         Z = torch.cat(Z)
 
-        return TensorDataset(X, Y, Z)
+        return TensorDataset(X, Y, Y, Z)

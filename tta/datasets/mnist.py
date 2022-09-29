@@ -26,8 +26,8 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         input_shape = (1, 28, 28, 3)
         C = 2
         K = len(self.Z)
-        environments = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-        super().__init__(input_shape, C, K, environments)
+        confounder_strength = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+        super().__init__(input_shape, C, K, confounder_strength)
 
         self.train_domains = train_domains
         self.label_noise = label_noise
@@ -60,7 +60,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
             confounder1 = np.array([[1.0, 0.0], [0.0, 1.0]])
             confounder2 = np.array([[0.0, 1.0], [1.0, 0.0]])
 
-        for i, strength in enumerate(self.environments):
+        for i, strength in enumerate(self.confounder_strength):
             offset = 0 if i in train_domains else 1
             images = original_images[offset::2]
             labels = original_labels[offset::2]
@@ -71,10 +71,10 @@ class MultipleDomainMNIST(MultipleDomainDataset):
             y_count = torch.zeros(C)
             for label in counter:
                 y_count[label] += counter[label]
-            joint = torch.sum(y_count[:, np.newaxis] * conditional, 0)
-            joint /= len(labels)
+            y_freq = y_count / len(labels)
+            joint_YZ = y_freq[:, np.newaxis] * conditional
 
-            self.domains.append((joint, domain))
+            self.domains.append((joint_YZ, domain))
 
 
     def shift(self, images, labels, conditional):
@@ -94,7 +94,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         z_flattened = len(self.angles) * z[:, 0] + z[:, 1]
 
         # transform X based on Z
-        x = torch.zeros(N, 28, 28, 3)
+        x = torch.zeros((N, *self.input_shape[1:]))
         for i, (image, (color_idx, angle_idx)) in enumerate(zip(images, z)):
             color = self.colors[color_idx]
             angle = self.angles[angle_idx]
@@ -107,4 +107,4 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
             x[i] = image
 
-        return TensorDataset(x, y, z_flattened)
+        return TensorDataset(x, labels, y, z_flattened)
