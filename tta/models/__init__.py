@@ -35,7 +35,6 @@ class AdaptiveNN(nn.Module):
 
     def raw_logit(self, x, train: bool):
         logit = self.net(x, train)
-        logit = logit - jnp.mean(logit, axis=-1, keepdims=True)
 
         return logit
 

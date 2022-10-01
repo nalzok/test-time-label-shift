@@ -7,6 +7,40 @@ import matplotlib.pyplot as plt
 from .common import Curves
 
 
+def plot_mean(
+    mean_sweeps: Curves,
+    train_batch_size: int,
+    confounder_strength: np.ndarray,
+    train_domains_set: Set[int],
+    plot_title: str,
+    plot_path: Path,
+):
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    oracle_mean_sweep = mean_sweeps.pop(("Oracle", None, train_batch_size))
+    ax.plot(confounder_strength, oracle_mean_sweep[:-1], linestyle="--", label="Oracle")
+    unadapted_mean_sweep = mean_sweeps.pop(("Unadapted", None, train_batch_size))
+    ax.plot(
+        confounder_strength, unadapted_mean_sweep[:-1], linestyle="--", label="Unadapted"
+    )
+
+    for (label, _, _), mean_sweep in mean_sweeps.items():
+        ax.plot(confounder_strength, mean_sweep[:-1], label=label)
+
+    for i in train_domains_set:
+        ax.axvline(confounder_strength[i], linestyle=":")
+
+    plt.ylim((0, 1))
+    plt.xlabel("Shift parameter")
+    plt.ylabel("Average probability of class 1")
+    plt.title(plot_title)
+    plt.grid(True)
+    plt.legend()
+
+    plt.savefig(plot_path, dpi=300)
+    plt.close(fig)
+
+
 def plot_l1(
     l1_sweeps: Curves,
     train_batch_size: int,

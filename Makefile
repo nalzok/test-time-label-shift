@@ -8,11 +8,11 @@ debug:
 		--dataset_apply_rotation False \
 		--dataset_label_noise 0.1 \
 		--train_model LeNet \
-		--train_domains 9 \
+		--train_domains 5 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
-		--train_epochs 20 \
+		--train_epochs 200 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
 		--calibration_temperature 1 \

@@ -31,7 +31,7 @@ def create_train_state(key: Any, C: int, K: int, T: float, model: str,
     variables, prior = variables.pop('prior')
     assert not variables
 
-    tx = optax.adam(learning_rate)
+    tx = optax.adamw(learning_rate)
     state = TrainState.create(
             apply_fn=partial(net.apply, method=net.adapted_prob),
             params=params,

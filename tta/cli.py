@@ -16,7 +16,7 @@ from torch.utils.data import Dataset, DataLoader
 import click
 from sklearn.metrics import roc_auc_score
 
-from .common import Curves
+from .common import Curves, Sweeps
 from .utils import Tee
 from .datasets import split
 from .datasets.mnist import MultipleDomainMNIST
@@ -33,7 +33,7 @@ from .train import (
     test_step,
 )
 from .restore import restore_train_state
-from .visualize import plot_l1, plot_auc, plot_accuracy, plot_norm
+from .visualize import plot_mean, plot_l1, plot_auc, plot_accuracy, plot_norm
 
 
 @click.command()
@@ -158,7 +158,7 @@ def main(
     plot_title: str,
     seed: int,
     num_workers: int,
-) -> Tuple[Curves, Curves, Curves, Curves]:
+) -> Tuple[Curves, Curves, Curves, Curves, Curves]:
     log_root = Path("logs/")
     plot_root = Path("plots/")
     npz_root = Path("npz/")
@@ -170,11 +170,13 @@ def main(
     log_path = log_root / f"{config_name}.txt"
     sys.stdout = Tee(log_path)
 
+    mean_plot_path = plot_root / f"{config_name}_mean.png"
     l1_plot_path = plot_root / f"{config_name}_l1.png"
     auc_plot_path = plot_root / f"{config_name}_auc.png"
     accuracy_plot_path = plot_root / f"{config_name}_accuracy.png"
     norm_plot_path = plot_root / f"{config_name}_norm.png"
 
+    mean_npz_path = npz_root / f"{config_name}_mean.npz"
     l1_npz_path = npz_root / f"{config_name}_l1.npz"
     auc_npz_path = npz_root / f"{config_name}_auc.npz"
     accuracy_npz_path = npz_root / f"{config_name}_accuracy.npz"
@@ -255,17 +257,23 @@ def main(
     )
 
     (
+        oracle_mean_sweep,
         oracle_l1_sweep,
         oracle_auc_sweep,
         oracle_accuracy_sweep,
         oracle_norm_sweep,
     ) = oracle_sweep
     (
+        unadapted_mean_sweep,
         unadapted_l1_sweep,
         unadapted_auc_sweep,
         unadapted_accuracy_sweep,
         unadapted_norm_sweep,
     ) = unadapted_sweep
+    mean_sweeps: Curves = {
+        ("Oracle", None, train_batch_size): oracle_mean_sweep,
+        ("Unadapted", None, train_batch_size): unadapted_mean_sweep,
+    }
     l1_sweeps: Curves = {
         ("Oracle", None, train_batch_size): oracle_l1_sweep,
         ("Unadapted", None, train_batch_size): unadapted_l1_sweep,
@@ -291,7 +299,7 @@ def main(
     ):
         label = f"{prior_strength=} | {symmetric_dirichlet=} | {fix_marginal=} | {batch_size=}"
         scheme = (prior_strength, symmetric_dirichlet, fix_marginal)
-        state, (l1_sweep, auc_sweep, accuracy_sweep, norm_sweep) = adapt(
+        state, (mean_sweep, l1_sweep, auc_sweep, accuracy_sweep, norm_sweep) = adapt(
             state,
             C,
             K,
@@ -307,11 +315,14 @@ def main(
             num_workers,
         )
         key = label, (prior_strength, symmetric_dirichlet, fix_marginal), batch_size
+        mean_sweeps[key] = mean_sweep
         l1_sweeps[key] = l1_sweep
         auc_sweeps[key] = auc_sweep
         accuracy_sweeps[key] = accuracy_sweep
         norm_sweeps[key] = norm_sweep
 
+    print("===> mean_sweeps")
+    pprint(mean_sweeps)
     print("===> l1_sweeps")
     pprint(l1_sweeps)
     print("===> auc_sweeps")
@@ -321,11 +332,20 @@ def main(
     print("===> norm_sweeps")
     pprint(norm_sweeps)
 
+    jnp.savez(mean_npz_path, **{k: v for (k, _, _), v in mean_sweeps.items()})
     jnp.savez(l1_npz_path, **{k: v for (k, _, _), v in l1_sweeps.items()})
     jnp.savez(auc_npz_path, **{k: v for (k, _, _), v in auc_sweeps.items()})
     jnp.savez(accuracy_npz_path, **{k: v for (k, _, _), v in accuracy_sweeps.items()})
     jnp.savez(norm_npz_path, **{k: v for (k, _, _), v in norm_sweeps.items()})
 
+    plot_mean(
+        mean_sweeps,
+        train_batch_size,
+        confounder_strength,
+        train_domains_set,
+        plot_title,
+        mean_plot_path,
+    )
     plot_l1(
         l1_sweeps,
         train_batch_size,
@@ -360,7 +380,7 @@ def main(
         norm_plot_path,
     )
 
-    return l1_sweeps, auc_sweeps, accuracy_sweeps, norm_sweeps
+    return mean_sweeps, l1_sweeps, auc_sweeps, accuracy_sweeps, norm_sweeps
 
 
 def train(
@@ -392,8 +412,8 @@ def train(
     int,
     np.ndarray,
     List[Tuple[torch.Tensor, Dataset]],
-    Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-    Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
+    Sweeps,
+    Sweeps,
 ]:
     if dataset_name == "MNIST":
         root = Path("data/")
@@ -442,7 +462,7 @@ def train(
     )
     print("train", len(train))
     print("calibration", len(calibration))
-    train_domain = next(iter(train_domains_set))
+    train_domain, = train_domains_set
     print(f"test_splits[{train_domain}][-1]", len(test_splits[train_domain][-1]))
 
     eval_splits = test_splits.copy()
@@ -603,9 +623,10 @@ def adapt(
     device_count: int,
     generator: torch.Generator,
     num_workers: int,
-) -> Tuple[TrainState, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
+) -> Tuple[TrainState, Sweeps]:
     print(f"---> {label}")
 
+    mean_sweep = jnp.empty(len(eval_splits))
     l1_sweep = jnp.empty(len(eval_splits))
     auc_sweep = jnp.empty(len(eval_splits))
     accuracy_sweep = jnp.empty(len(eval_splits))
@@ -613,6 +634,7 @@ def adapt(
     for i, (joint_YZ, eval_) in enumerate(eval_splits):
         # happens on the source domain when train_fraction = 1.0
         if len(eval_) == 0:
+            mean_sweep = mean_sweep.at[i].set(jnp.nan)
             l1_sweep = l1_sweep.at[i].set(jnp.nan)
             auc_sweep = auc_sweep.at[i].set(jnp.nan)
             accuracy_sweep = accuracy_sweep.at[i].set(jnp.nan)
@@ -639,7 +661,7 @@ def adapt(
         prob = prob[:, 1, :]  # P(Y=1|Y_tilde, Z)
 
         # using shuffle=True so that Y contains multiple classes, otherwise AUC is not defined
-        l1 = auc = hits = norm = 0
+        mean = l1 = auc = hits = norm = 0
         eval_loader = DataLoader(
             eval_,
             batch_size,
@@ -684,12 +706,14 @@ def adapt(
 
             score, hit = test_step(state, X, Y)
 
+            mean += jnp.sum(score)
             l1 += jnp.sum(jnp.abs(score.flatten() - prob[Y_tilde, Z]))
             auc += N * roc_auc_score(Y.flatten(), score.flatten())
             hits += unreplicate(hit)
             prior = unreplicate(state.prior["target"]).reshape((C, K))
             norm += N * jnp.linalg.norm(prior - joint_YZ)
 
+        mean = mean / len(eval_)
         l1 = l1 / len(eval_)
         auc = auc / len(eval_)
         accuracy = hits / len(eval_)
@@ -697,23 +721,25 @@ def adapt(
 
         with jnp.printoptions(precision=4):
             print(
-                f"[{label}] Environment {i:>2} {seen} L1 {l1}, AUC {auc}, Accuracy {accuracy}, Norm {norm}"
+                f"[{label}] Environment {i:>2} {seen} mean {mean}, L1 {l1}, AUC {auc}, Accuracy {accuracy}, Norm {norm}"
             )
 
-        # note that auc/accuracy/norm_sweep.at[-1] is the training auc/accuracy/norm
+        # note that foo_sweep.at[-1] is the training foo
+        mean_sweep = mean_sweep.at[i].set(mean)
         l1_sweep = l1_sweep.at[i].set(l1)
         auc_sweep = auc_sweep.at[i].set(auc)
         accuracy_sweep = accuracy_sweep.at[i].set(accuracy)
         norm_sweep = norm_sweep.at[i].set(norm)
 
     print(
-        f"[{label}] Average L1 {jnp.nanmean(l1_sweep[:-1])}, "
+        f"[{label}] Average response {jnp.nanmean(mean_sweep[:-1])}"
+        f"Average L1 {jnp.nanmean(l1_sweep[:-1])}, "
         f"Average AUC {jnp.nanmean(auc_sweep[:-1])}, "
         f"Accuracy {jnp.nanmean(accuracy_sweep[:-1])}, "
         f"Norm {jnp.nanmean(norm_sweep[:-1])}"
     )
 
-    return state, (l1_sweep, auc_sweep, accuracy_sweep, norm_sweep)
+    return state, (mean_sweep, l1_sweep, auc_sweep, accuracy_sweep, norm_sweep)
 
 
 def estimate_source_prior(
