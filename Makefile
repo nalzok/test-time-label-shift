@@ -12,10 +12,9 @@ debug:
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
-		--train_epochs 200 \
+		--train_epochs 20 \
 		--train_lr 1e-3 \
 		--source_prior_estimation induce \
-		--calibration_temperature 1 \
 		--calibration_batch_size 64 \
 		--calibration_epochs 10 \
 		--calibration_lr 1e-3 \

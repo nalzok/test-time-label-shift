@@ -18,9 +18,9 @@ class TrainState(train_state.TrainState):
     prior: flax.core.FrozenDict[str, jnp.ndarray]
 
 
-def create_train_state(key: Any, C: int, K: int, T: float, model: str,
+def create_train_state(key: Any, C: int, K: int, model: str,
         learning_rate: float, specimen: jnp.ndarray, device_count: int) -> TrainState:
-    net = AdaptiveNN(C=C, K=K, T=T, model=model)
+    net = AdaptiveNN(C=C, K=K, model=model)
 
     variables = net.init(key, specimen, True, method=net.adapted_prob)
     variables, params = variables.pop('params')

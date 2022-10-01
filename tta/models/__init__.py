@@ -9,7 +9,6 @@ from .lenet import LeNet
 class AdaptiveNN(nn.Module):
     C: int
     K: int
-    T: float
     model: str
 
     def setup(self):
@@ -24,6 +23,7 @@ class AdaptiveNN(nn.Module):
             raise ValueError(f'Unknown network architecture {self.model}')
 
         self.b = self.param('b', jax.nn.initializers.zeros, (self.M,))
+        self.T = self.param('T', jax.nn.initializers.ones, ())
         self.source_prior = self.variable('prior', 'source',
                                           jax.nn.initializers.constant(1/self.M,),
                                           None,

@@ -58,7 +58,6 @@ from .visualize import plot_mean, plot_l1, plot_auc, plot_accuracy, plot_norm
     type=click.Choice(["count", "induce"]),
     required=True,
 )
-@click.option("--calibration_temperature", type=float, required=True)
 @click.option("--calibration_domains", type=str, required=False)
 @click.option("--calibration_fraction", type=float, required=False)
 @click.option("--calibration_batch_size", type=int, required=True)
@@ -87,7 +86,6 @@ def cli(
     train_epochs: int,
     train_lr: float,
     source_prior_estimation: str,
-    calibration_temperature: float,
     calibration_domains: Optional[str],
     calibration_fraction: Optional[float],
     calibration_batch_size: int,
@@ -115,7 +113,6 @@ def cli(
         train_epochs,
         train_lr,
         source_prior_estimation,
-        calibration_temperature,
         calibration_domains,
         calibration_fraction,
         calibration_batch_size,
@@ -145,7 +142,6 @@ def main(
     train_epochs: int,
     train_lr: float,
     source_prior_estimation: str,
-    calibration_temperature: float,
     calibration_domains: Optional[str],
     calibration_fraction: Optional[float],
     calibration_batch_size: int,
@@ -244,7 +240,6 @@ def main(
         train_epochs,
         train_lr,
         source_prior_estimation,
-        calibration_temperature,
         calibration_domains_set,
         calibration_fraction,
         calibration_batch_size,
@@ -396,7 +391,6 @@ def train(
     train_epochs: int,
     train_lr: float,
     source_prior_estimation: str,
-    calibration_temperature: float,
     calibration_domains_set: Set[int],
     calibration_fraction: float,
     calibration_batch_size: int,
@@ -474,7 +468,6 @@ def train(
         key_init,
         C,
         K,
-        calibration_temperature,
         train_model,
         train_lr,
         specimen,
@@ -544,6 +537,9 @@ def train(
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
+    
+    print("Temperature =", unreplicate(state.params["T"]))
+    print("Bias =", unreplicate(state.params["b"]))
 
     print("===> Estimating Source Label Prior")
     source_prior = estimate_source_prior(
@@ -732,7 +728,7 @@ def adapt(
         norm_sweep = norm_sweep.at[i].set(norm)
 
     print(
-        f"[{label}] Average response {jnp.nanmean(mean_sweep[:-1])}"
+        f"[{label}] Average response {jnp.nanmean(mean_sweep[:-1])}, "
         f"Average L1 {jnp.nanmean(l1_sweep[:-1])}, "
         f"Average AUC {jnp.nanmean(auc_sweep[:-1])}, "
         f"Accuracy {jnp.nanmean(accuracy_sweep[:-1])}, "
