@@ -53,11 +53,6 @@ from .visualize import plot_mean, plot_l1, plot_auc, plot_accuracy, plot_norm
 @click.option("--train_batch_size", type=int, required=True)
 @click.option("--train_epochs", type=int, required=True)
 @click.option("--train_lr", type=float, required=True)
-@click.option(
-    "--source_prior_estimation",
-    type=click.Choice(["count", "induce"]),
-    required=True,
-)
 @click.option("--calibration_domains", type=str, required=False)
 @click.option("--calibration_fraction", type=float, required=False)
 @click.option("--calibration_batch_size", type=int, required=True)
@@ -85,7 +80,6 @@ def cli(
     train_batch_size: int,
     train_epochs: int,
     train_lr: float,
-    source_prior_estimation: str,
     calibration_domains: Optional[str],
     calibration_fraction: Optional[float],
     calibration_batch_size: int,
@@ -112,7 +106,6 @@ def cli(
         train_batch_size,
         train_epochs,
         train_lr,
-        source_prior_estimation,
         calibration_domains,
         calibration_fraction,
         calibration_batch_size,
@@ -141,7 +134,6 @@ def main(
     train_batch_size: int,
     train_epochs: int,
     train_lr: float,
-    source_prior_estimation: str,
     calibration_domains: Optional[str],
     calibration_fraction: Optional[float],
     calibration_batch_size: int,
@@ -239,7 +231,6 @@ def main(
         train_batch_size,
         train_epochs,
         train_lr,
-        source_prior_estimation,
         calibration_domains_set,
         calibration_fraction,
         calibration_batch_size,
@@ -390,7 +381,6 @@ def train(
     train_batch_size: int,
     train_epochs: int,
     train_lr: float,
-    source_prior_estimation: str,
     calibration_domains_set: Set[int],
     calibration_fraction: float,
     calibration_batch_size: int,
@@ -538,11 +528,22 @@ def train(
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
     
-    print("Temperature =", unreplicate(state.params["T"]))
-    print("Bias =", unreplicate(state.params["b"]))
+    print("---> Temperature =", unreplicate(state.params["T"]))
+    print("---> Bias =", unreplicate(state.params["b"]))
 
     print("===> Estimating Source Label Prior")
-    source_prior = estimate_source_prior(
+    source_prior_induced = estimate_source_prior(
+        calibration,
+        calibration_batch_size,
+        num_workers,
+        generator,
+        C,
+        K,
+        device_count,
+        state,
+        "induce"
+    )
+    source_prior_empirical = estimate_source_prior(
         train,
         train_batch_size,
         num_workers,
@@ -551,11 +552,15 @@ def train(
         K,
         device_count,
         state,
-        source_prior_estimation,
+        "count"
     )
+    
+    print("---> Induced source label prior =", source_prior_induced)
+    print("---> Empirical source label prior =", source_prior_empirical)
+    print("---> Total variation distance =", jnp.sum(jnp.abs(source_prior_induced - source_prior_empirical))/2)
 
     prior = state.prior.unfreeze()
-    prior["source"] = source_prior
+    prior["source"] = replicate(source_prior_induced)
     state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
 
     print("===> Adapting & Evaluating")
@@ -739,8 +744,8 @@ def adapt(
 
 
 def estimate_source_prior(
-    train: Dataset,
-    train_batch_size: int,
+    dataset: Dataset,
+    batch_size: int,
     num_workers: int,
     generator: torch.Generator,
     C: int,
@@ -749,9 +754,9 @@ def estimate_source_prior(
     state: TrainState,
     method: str,
 ) -> jnp.ndarray:
-    train_loader = DataLoader(
-        train,
-        train_batch_size,
+    loader = DataLoader(
+        dataset,
+        batch_size,
         shuffle=False,
         num_workers=num_workers,
         generator=generator,
@@ -759,22 +764,22 @@ def estimate_source_prior(
     if method == "count":
         source_prior = np.zeros((C * K))
         I = np.identity(C * K)
-        for _, _, Y, Z in train_loader:
+        for _, _, Y, Z in loader:
             M = Y * K + Z
             source_prior += np.sum(I[M], axis=0)
 
-        source_prior = replicate(jnp.array(source_prior / np.sum(source_prior)))
+        source_prior = jnp.array(source_prior / np.sum(source_prior))
 
     elif method == "induce":
         N = 0
-        source_prior = jnp.zeros((device_count, C * K))
-        for X, _, _, _ in train_loader:
+        source_prior = jnp.zeros(C * K)
+        for X, _, _, _ in loader:
             remainder = X.shape[0] % device_count
             X = X[remainder:]
 
             N += X.shape[0]
             X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
-            source_prior = source_prior + induce_step(state, X)
+            source_prior = source_prior + unreplicate(induce_step(state, X))
 
         source_prior = source_prior / N
 
