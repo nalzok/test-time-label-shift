@@ -121,9 +121,10 @@ def induce_step(state: TrainState, X: jnp.ndarray) -> jnp.ndarray:
     return prob_sum
 
 
-@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(2, 3, 5, 6), donate_argnums=(0,))
-def adapt_step(state: TrainState, X: jnp.ndarray, C: int, K: int,
-        prior_strength: float, symmetric_dirichlet: bool, fix_marginal: bool) -> TrainState:
+# @partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3, 4, 5, 6), donate_argnums=(0,))
+@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3, 4, 5, 6))
+def adapt_step(state: TrainState, X: jnp.ndarray, prior_strength: float,
+        symmetric_dirichlet: bool, fix_marginal: bool, C: int, K: int) -> TrainState:
     M = C * K
     source_prior = state.prior['source']
     if symmetric_dirichlet:

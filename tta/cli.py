@@ -688,11 +688,11 @@ def adapt(
                 state = adapt_step(
                     state,
                     X,
-                    C,
-                    K,
                     replicate(prior_strength),
                     symmetric_dirichlet,
                     fix_marginal,
+                    C,
+                    K,
                 )
             elif label == "Oracle":
                 prior = state.prior.unfreeze()
