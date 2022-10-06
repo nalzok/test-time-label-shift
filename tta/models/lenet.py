@@ -1,4 +1,4 @@
-"""Implementation of ResNet."""
+"""Implementation of LeNet."""
 
 import flax.linen as nn
 

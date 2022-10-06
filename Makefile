@@ -8,20 +8,20 @@ debug:
 		--dataset_apply_rotation False \
 		--dataset_label_noise 0.1 \
 		--train_model LeNet \
-		--train_domains 5 \
+		--train_domains 9 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
-		--train_epochs 200 \
+		--train_epochs 20 \
 		--train_lr 1e-3 \
 		--calibration_batch_size 64 \
-		--calibration_epochs 200 \
+		--calibration_epochs 5 \
 		--calibration_lr 1e-3 \
 		--test_prior_strength 1 \
 		--test_prior_strength 4096 \
+		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
 		--test_fix_marginal True \
-		--test_batch_size 64 \
 		--test_batch_size 512 \
 		--seed 2022 \
 		--num_workers 48
