@@ -20,8 +20,9 @@ from .common import Curves, Sweeps
 from .utils import Tee
 from .datasets import split
 from .datasets.mnist import MultipleDomainMNIST
-from .datasets.waterbirds import MultipleDomainWaterbirds
 from .datasets.coco import ColoredCOCO
+from .datasets.waterbirds import MultipleDomainWaterbirds
+from .datasets.chexpert import MultipleDomainCheXpert
 from .train import (
     TrainState,
     create_train_state,
@@ -39,7 +40,7 @@ from .visualize import plot_mean, plot_l1, plot_auc, plot_accuracy, plot_norm
 @click.command()
 @click.option("--config_name", type=str, required=True)
 @click.option(
-    "--dataset_name", type=click.Choice(["MNIST", "COCO", "Waterbirds"]), required=True
+    "--dataset_name", type=click.Choice(["MNIST", "COCO", "Waterbirds", "CheXpert"]), required=True
 )
 @click.option("--dataset_apply_rotation", type=bool, required=True)
 @click.option("--dataset_label_noise", type=float, required=True)
@@ -429,6 +430,16 @@ def train(
 
         root = Path("data/")
         dataset = MultipleDomainWaterbirds(root, generator)
+    elif dataset_name == "CheXpert":
+        assert (
+            dataset_apply_rotation is False
+        ), "Parameter dataset_apply_rotation is not supported with CheXpert"
+        assert (
+            dataset_label_noise == 0
+        ), "Parameter dataset_label_noise is not supported with CheXpert"
+
+        root = Path("data/CheXpert")
+        dataset = MultipleDomainCheXpert(root, generator, train_domains_set, "PNEUMONIA", "GENDER")
     else:
         raise ValueError(f"Unknown dataset {dataset_name}")
 
@@ -662,7 +673,11 @@ def adapt(
         prob = prob[:, 1, :]  # P(Y=1|Y_tilde, Z)
 
         # using shuffle=True so that Y contains multiple classes, otherwise AUC is not defined
-        mean = l1 = auc = hits = norm = 0
+        mean = l1 = hits = norm = 0
+        epoch_Y = jnp.empty(len(eval_) // device_count * device_count)
+        epoch_score = jnp.empty(len(eval_) // device_count * device_count)
+        offset = 0
+
         eval_loader = DataLoader(
             eval_,
             batch_size,
@@ -709,14 +724,17 @@ def adapt(
 
             mean += jnp.sum(score)
             l1 += jnp.sum(jnp.abs(score.flatten() - prob[Y_tilde, Z]))
-            auc += N * roc_auc_score(Y.flatten(), score.flatten())
+            epoch_Y = epoch_Y.at[offset:offset+N].set(Y.flatten())
+            epoch_score = epoch_score.at[offset:offset+N].set(score.flatten())
             hits += unreplicate(hit)
             prior = unreplicate(state.prior["target"]).reshape((C, K))
             norm += N * jnp.linalg.norm(prior - joint_YZ)
 
+            offset += N
+
         mean = mean / len(eval_)
         l1 = l1 / len(eval_)
-        auc = auc / len(eval_)
+        auc = roc_auc_score(epoch_Y, epoch_score)
         accuracy = hits / len(eval_)
         norm = norm / len(eval_)
 

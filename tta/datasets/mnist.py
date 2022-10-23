@@ -47,12 +47,12 @@ class MultipleDomainMNIST(MultipleDomainDataset):
                                      original_dataset_te.targets))
         original_labels = (original_labels < 5).long()
 
-        shuffle = torch.randperm(len(original_images), generator=generator)
+        shuffle = torch.randperm(len(original_images), generator=self.generator)
 
         original_images = original_images[shuffle]
         original_labels = original_labels[shuffle]
 
-        # joint distribution of Y and Z
+        # P(Z|Y)
         if apply_rotation:
             confounder1 = np.array([[0.5, 0.5, 0.0, 0.0], [0.0, 0.0, 0.5, 0.5]])
             confounder2 = np.array([[0.0, 0.0, 0.5, 0.5], [0.5, 0.5, 0.0, 0.0]])
@@ -77,18 +77,18 @@ class MultipleDomainMNIST(MultipleDomainDataset):
             self.domains.append((joint_YZ, domain))
 
 
-    def shift(self, images, labels, conditional):
+    def shift(self, images, y_tilde, conditional):
         lookup_table = torch.cumsum(conditional, dim=1)
         to_tensor = T.ToTensor()
-        N = labels.size(0)
+        N = y_tilde.size(0)
 
         # inject noise to Y
         if self.label_noise > 0:
             weights = torch.ones((N, self.C))
-            weights[torch.arange(N), labels] += 1/self.label_noise - 2
+            weights[torch.arange(N), y_tilde] += 1/self.label_noise - 2
         else:
             weights = torch.zeros((N, self.C))
-            weights[torch.arange(N), labels] = 1
+            weights[torch.arange(N), y_tilde] = 1
         y = torch.multinomial(weights, 1, generator=self.generator).squeeze(dim=-1)
 
         # generate Z condition on Y
@@ -98,7 +98,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         z_flattened = len(self.angles) * z[:, 0] + z[:, 1]
 
         # transform X based on Z
-        x = torch.zeros((N, *self.input_shape[1:]))
+        x = torch.empty((N, *self.input_shape[1:]))
         for i, (image, (color_idx, angle_idx)) in enumerate(zip(images, z)):
             color = self.colors[color_idx]
             angle = self.angles[angle_idx]
@@ -111,4 +111,4 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
             x[i] = image
 
-        return TensorDataset(x, labels, y, z_flattened)
+        return TensorDataset(x, y_tilde, y, z_flattened)

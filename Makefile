@@ -4,10 +4,10 @@ debug:
 	pipenv run python3 \
 		-m tta.cli \
 		--config_name debug \
-		--dataset_name MNIST \
+		--dataset_name CheXpert \
 		--dataset_apply_rotation False \
-		--dataset_label_noise 0.1 \
-		--train_model LeNet \
+		--dataset_label_noise 0 \
+		--train_model Linear \
 		--train_domains 9 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \

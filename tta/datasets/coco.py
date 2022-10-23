@@ -44,18 +44,18 @@ class ColoredCOCO(MultipleDomainDataset):
         confounder_strength = np.array([0.9, 0.8, 0.1])
         super().__init__(input_shape, C, K, confounder_strength)
 
-        if root is None:
-            raise ValueError('Data directory not specified!')
-
         m = sha256()
         m.update(str(annFile).encode())
         cache_key = m.hexdigest()
         cache_file = root / 'cached' / f'{cache_key}.pt'
         if cache_file.is_file():
-            # NOTE: The RNG state won't be the same if we load from cache
+            # NOTE: The torch.Generator state won't be the same if we load from cache
             print(f'Loading cached datasets from {cache_file}')
             self.domains = torch.load(cache_file)
             return
+
+        if root is None:
+            raise ValueError('Data directory not specified!')
 
         self.root = root
         self.coco = COCO(annFile)
@@ -68,7 +68,7 @@ class ColoredCOCO(MultipleDomainDataset):
 
         self.generator = generator
 
-        shuffle = torch.randperm(len(self.image_ids), generator=generator)
+        shuffle = torch.randperm(len(self.image_ids), generator=self.generator)
 
         independent = np.ones((C, K)) * 1/K
         confounding1 = np.eye(C, K)

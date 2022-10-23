@@ -2,8 +2,9 @@ import jax
 import jax.numpy as jnp
 from flax import linen as nn
 
-from .resnet import ResNet
+from .linear import Linear
 from .lenet import LeNet
+from .resnet import ResNet
 
 
 class AdaptiveNN(nn.Module):
@@ -14,7 +15,9 @@ class AdaptiveNN(nn.Module):
     def setup(self):
         self.M = self.C * self.K
 
-        if self.model == 'LeNet':
+        if self.model == 'Linear':
+            self.net = Linear(num_outputs=self.M)
+        elif self.model == 'LeNet':
             self.net = LeNet(num_outputs=self.M)
         elif self.model.startswith('ResNet'):
             self.num_layers = int(self.model[6:])

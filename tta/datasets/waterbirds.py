@@ -28,7 +28,7 @@ class MultipleDomainWaterbirds(MultipleDomainDataset):
         # make Z compliant in shape
         self.waterbirds._metadata_array = self.waterbirds._metadata_array[:, 0]
 
-        # joint distribution of Y and Z
+        # P(Z|Y)
         conditionals = [
             np.array([[0.95, 0.05], [0.05, 0.95]]),
             np.array([[0.95, 0.05], [0.05, 0.95]]),
