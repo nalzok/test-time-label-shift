@@ -39,14 +39,12 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         embeddings = np.load(root / "embeddings.npz")
 
         labels = labels.loc[labels["GENDER"] != "Unknown"]
-        labels = labels.loc[labels["PNEUMONIA"].isin((1, 3))]
 
-        # FIXME: What does that mean?
-        # >>> labels["PNEUMONIA"].value_counts()
-        # 3    167855
-        # 0     15933
-        # 1      4657
-        # 2      2054
+        # 0 = no mention    - 15933
+        # 1 = positive      - 4657
+        # 2 = uncertain     - 2054
+        # 3 = negative      - 167855
+        labels = labels.loc[labels["PNEUMONIA"].isin({1, 3})]
 
         self.Y_column = Y_column
         self.Z_column = Z_column
@@ -79,6 +77,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             quota = torch.from_numpy(quota)
             count = torch.round(torch.min(quota/joint_YZ_flatten)*joint_YZ_flatten)
             count = count.long().reshape((2, 2))
+            joint_YZ = count / torch.sum(count)
 
             domain, in_sample = self.sample(embeddings, labels, mask, count)
             mask &= ~labels.index.isin(in_sample)
@@ -96,6 +95,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             quota = torch.from_numpy(quota)
             count = torch.round(torch.min(quota/joint_YZ_flatten)*joint_YZ_flatten)
             count = count.long().reshape((2, 2))
+            joint_YZ = count / torch.sum(count)
 
             domain, _ = self.sample(embeddings, labels, mask, count)
             domains[i] = (joint_YZ, domain)

@@ -46,7 +46,8 @@ def create_train_state(key: Any, C: int, K: int, model: str,
 
 
 @partial(jax.pmap, axis_name='batch', donate_argnums=(0,))
-def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) -> Tuple[TrainState, jnp.ndarray]:
+def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) \
+        -> Tuple[TrainState, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
     @partial(jax.value_and_grad, has_aux=True)
     def loss_fn(params):
         variables = {
@@ -59,11 +60,16 @@ def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) -> Tuple[Train
         )
 
         loss = optax.softmax_cross_entropy_with_integer_labels(logit, M)
+        mask = jnp.arange(logit.shape[-1])[..., jnp.newaxis] == M
+        hit = jnp.sum(mask * (jnp.argmax(logit, -1) == M), axis=-1)
+        total = jnp.sum(mask, axis=-1)
 
-        return loss.sum(), new_model_state
+        return loss.sum(), (new_model_state, hit, total)
 
-    (loss, new_model_state), grads = loss_fn(state.params)
+    (loss, (new_model_state, hit, total)), grads = loss_fn(state.params)
     loss = jax.lax.psum(loss, axis_name='batch')
+    hit = jax.lax.psum(hit, axis_name='batch')
+    total = jax.lax.psum(total, axis_name='batch')
     grads = jax.lax.psum(grads, axis_name='batch')
 
     state = state.apply_gradients(
@@ -71,11 +77,12 @@ def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray) -> Tuple[Train
         batch_stats=new_model_state['batch_stats'],
     )
 
-    return state, loss
+    return state, (loss, hit, total)
 
 
 @partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3,), donate_argnums=(0,))
-def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, learning_rate: float) -> Tuple[TrainState, jnp.ndarray]:
+def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, learning_rate: float) \
+        -> Tuple[TrainState, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
     @partial(jax.value_and_grad, has_aux=True)
     def loss_fn(params):
         variables = {
@@ -88,11 +95,16 @@ def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, learning
         )
 
         loss = optax.softmax_cross_entropy_with_integer_labels(logit, M)
+        mask = jnp.arange(logit.shape[-1])[..., jnp.newaxis] == M
+        hit = jnp.sum(mask * (jnp.argmax(logit, -1) == M), axis=-1)
+        total = jnp.sum(mask, axis=-1)
 
-        return loss.sum(), new_model_state
+        return loss.sum(), (new_model_state, hit, total)
 
-    (loss, new_model_state), grads = loss_fn(state.params)
+    (loss, (new_model_state, hit, total)), grads = loss_fn(state.params)
     loss = jax.lax.psum(loss, axis_name='batch')
+    hit = jax.lax.psum(hit, axis_name='batch')
+    total = jax.lax.psum(total, axis_name='batch')
     grads = jax.lax.psum(grads, axis_name='batch')
 
     new_params = jax.tree_util.tree_map(lambda p, g: p - learning_rate * g, state.params, grads)
@@ -101,7 +113,7 @@ def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, learning
         batch_stats=new_model_state['batch_stats'],
     )
 
-    return state, loss
+    return state, (loss, hit, total)
 
 
 cross_replica_mean: Callable = jax.pmap(lambda x: jax.lax.pmean(x, 'batch'), 'batch')
@@ -190,15 +202,24 @@ def adapt_step(state: TrainState, X: jnp.ndarray, prior_strength: float,
 
  
 @partial(jax.pmap, axis_name='batch')
-def test_step(state: TrainState, image: jnp.ndarray, label: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def test_step(state: TrainState, image: jnp.ndarray, Y: jnp.ndarray, Z: jnp.ndarray) \
+        -> Tuple[Tuple[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]:
     variables = {
         'params': state.params,
         'batch_stats': state.batch_stats,
         'prior': state.prior
     }
-    target_prob = state.apply_fn(variables, image, False)
-    score = target_prob[:, 1]   # assumes binary label
-    prediction = jnp.argmax(target_prob, axis=-1)
-    hit = jax.lax.psum(jnp.sum(prediction == label), axis_name='batch')
 
-    return score, hit
+    prob_joint = state.apply_fn(variables, image, False)
+
+    prob_Y = jnp.sum(prob_joint, axis=-1)
+    score_Y = prob_Y[:, 1]   # assumes binary label
+    prediction_Y = jnp.argmax(prob_Y, axis=-1)
+    hit_Y = jax.lax.psum(jnp.sum(prediction_Y == Y), axis_name='batch')
+
+    prob_Z = jnp.sum(prob_joint, axis=-2)
+    score_Z = prob_Z[:, 1]   # assumes binary label
+    prediction_Z = jnp.argmax(prob_Z, axis=-1)
+    hit_Z = jax.lax.psum(jnp.sum(prediction_Z == Z), axis_name='batch')
+
+    return (score_Y, hit_Y), (score_Z, hit_Z)

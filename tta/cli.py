@@ -488,6 +488,8 @@ def train(
     )
     for epoch in range(train_epochs):
         epoch_loss = 0
+        epoch_hit = jnp.zeros(C * K, dtype=int)
+        epoch_total = jnp.zeros(C * K, dtype=int)
         for X, _, Y, Z in train_loader:
             remainder = X.shape[0] % device_count
             X = X[remainder:]
@@ -499,11 +501,13 @@ def train(
             Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
             M = Y * K + Z
 
-            state, loss = train_step(state, X, M)
+            state, (loss, hit, total) = train_step(state, X, M)
             epoch_loss += unreplicate(loss)
+            epoch_hit += unreplicate(hit)
+            epoch_total += unreplicate(total)
 
         with jnp.printoptions(precision=3):
-            print(f"Train epoch {epoch + 1}, loss: {epoch_loss}")
+            print(f"Train epoch {epoch + 1}, loss: {epoch_loss}, hit: {epoch_hit}, total: {epoch_total}")
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
@@ -519,6 +523,8 @@ def train(
         )
         for epoch in range(calibration_epochs):
             epoch_loss = 0
+            epoch_hit = jnp.zeros(C * K, dtype=int)
+            epoch_total = jnp.zeros(C * K, dtype=int)
             for X, _, Y, Z in calibration_loader:
                 remainder = X.shape[0] % device_count
                 X = X[remainder:]
@@ -530,11 +536,13 @@ def train(
                 Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
                 M = Y * K + Z
 
-                state, loss = calibration_step(state, X, M, calibration_lr)
+                state, (loss, hit, total) = calibration_step(state, X, M, calibration_lr)
                 epoch_loss += unreplicate(loss)
+                epoch_hit += unreplicate(hit)
+                epoch_total += unreplicate(total)
 
             with jnp.printoptions(precision=3):
-                print(f"Calibration epoch {epoch + 1}, loss: {epoch_loss}")
+                print(f"Calibration epoch {epoch + 1}, loss: {epoch_loss}, hit: {epoch_hit}, total: {epoch_total}")
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
@@ -696,7 +704,7 @@ def adapt(
             X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
             Y_tilde = jnp.array(Y_tilde)
             Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
-            Z = jnp.array(Z)
+            Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
 
             if isinstance(scheme, tuple):
                 prior_strength, symmetric_dirichlet, fix_marginal = scheme
@@ -720,10 +728,10 @@ def adapt(
             else:
                 raise ValueError(f"Unknown adaptation scheme {label}")
 
-            score, hit = test_step(state, X, Y)
+            (score, hit), (_, _) = test_step(state, X, Y, Z)
 
             mean += jnp.sum(score)
-            l1 += jnp.sum(jnp.abs(score.flatten() - prob[Y_tilde, Z]))
+            l1 += jnp.sum(jnp.abs(score.flatten() - prob[Y_tilde, Z.flatten()]))
             epoch_Y = epoch_Y.at[offset:offset+N].set(Y.flatten())
             epoch_score = epoch_score.at[offset:offset+N].set(score.flatten())
             hits += unreplicate(hit)

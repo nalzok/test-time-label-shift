@@ -60,6 +60,5 @@ class AdaptiveNN(nn.Module):
         prob = unnormalized / jnp.sum(unnormalized, axis=-1, keepdims=True)
 
         prob = prob.reshape((-1, self.C, self.K))
-        prob = jnp.sum(prob, axis=-1)
 
         return prob
