@@ -27,7 +27,7 @@ def split(dataset: MultipleDomainDataset, train_domains: Set[int], train_fractio
     calibration_splits = []
     test_splits = []
 
-    for i, (joint_YZ, domain) in enumerate(dataset.domains):
+    for i, (joint_M, domain) in enumerate(dataset.domains):
         if i in train_domains:
             # For source domains, we split it into train + calibrate + test
             train, test = split_dataset(domain, int(len(domain)*train_fraction))
@@ -35,16 +35,16 @@ def split(dataset: MultipleDomainDataset, train_domains: Set[int], train_fractio
 
             train_splits.append(train)
             calibration_splits.append(calibration)
-            test_splits.append((joint_YZ, test))
+            test_splits.append((joint_M, test))
         elif i in calibration_domains:
             # For calibration domains, we split it into calibrate + test
             calibration, test = split_dataset(domain, int(len(domain)*calibration_fraction))
 
             calibration_splits.append(calibration)
-            test_splits.append((joint_YZ, test))
+            test_splits.append((joint_M, test))
         else:
             # For target domains, all samples are used as test
-            test_splits.append((joint_YZ, domain))
+            test_splits.append((joint_M, domain))
 
     train = ConcatDataset(train_splits)
     calibrate = ConcatDataset(calibration_splits)

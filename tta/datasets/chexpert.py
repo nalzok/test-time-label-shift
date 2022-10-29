@@ -63,7 +63,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
 
         domains = [None for _ in confounder_strength]
 
-        labels["YZ"] = 2 * labels[Y_column] + labels[Z_column]
+        labels["M"] = 2 * labels[Y_column] + labels[Z_column]
         mask = np.ones(len(labels.index), dtype=bool)
 
         # Sample source domains
@@ -71,17 +71,17 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             if i not in train_domains:
                 continue
 
-            joint_YZ = torch.from_numpy(strength * confounder1 + (1-strength) * confounder2)
-            joint_YZ_flatten = joint_YZ.numpy().flatten()
-            quota = labels["YZ"].loc[mask].value_counts(ascending=True).to_numpy() // 2
+            joint_M = torch.from_numpy(strength * confounder1 + (1-strength) * confounder2)
+            joint_M_flatten = joint_M.numpy().flatten()
+            quota = labels["M"].loc[mask].value_counts(ascending=True).to_numpy() // 2
             quota = torch.from_numpy(quota)
-            count = torch.round(torch.min(quota/joint_YZ_flatten)*joint_YZ_flatten)
+            count = torch.round(torch.min(quota/joint_M_flatten)*joint_M_flatten)
             count = count.long().reshape((2, 2))
-            joint_YZ = count / torch.sum(count)
+            joint_M = count / torch.sum(count)
 
             domain, in_sample = self.sample(embeddings, labels, mask, count)
             mask &= ~labels.index.isin(in_sample)
-            domains[i] = (joint_YZ, domain)
+            domains[i] = (joint_M, domain)
 
 
         # Sample target domains
@@ -89,16 +89,16 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             if i in train_domains:
                 continue
 
-            joint_YZ = torch.from_numpy(strength * confounder1 + (1-strength) * confounder2)
-            joint_YZ_flatten = joint_YZ.numpy().flatten()
-            quota = labels["YZ"].loc[mask].value_counts(ascending=True).to_numpy()
+            joint_M = torch.from_numpy(strength * confounder1 + (1-strength) * confounder2)
+            joint_M_flatten = joint_M.numpy().flatten()
+            quota = labels["M"].loc[mask].value_counts(ascending=True).to_numpy()
             quota = torch.from_numpy(quota)
-            count = torch.round(torch.min(quota/joint_YZ_flatten)*joint_YZ_flatten)
+            count = torch.round(torch.min(quota/joint_M_flatten)*joint_M_flatten)
             count = count.long().reshape((2, 2))
-            joint_YZ = count / torch.sum(count)
+            joint_M = count / torch.sum(count)
 
             domain, _ = self.sample(embeddings, labels, mask, count)
-            domains[i] = (joint_YZ, domain)
+            domains[i] = (joint_M, domain)
 
         self.domains = domains
 
@@ -112,7 +112,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
 
         for Y in range(2):
             for Z in range(2):
-                masked = labels.loc[mask & (labels["YZ"] == 2 * Y + Z)]
+                masked = labels.loc[mask & (labels["M"] == 2 * Y + Z)]
                 indices = masked.sample(int(count[Y, Z]), random_state=42)
                 in_sample.update(indices.index)
 

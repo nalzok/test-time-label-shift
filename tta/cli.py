@@ -651,7 +651,7 @@ def adapt(
     auc_sweep = jnp.empty(len(eval_splits))
     accuracy_sweep = jnp.empty(len(eval_splits))
     norm_sweep = jnp.empty(len(eval_splits))
-    for i, (joint_YZ, eval_) in enumerate(eval_splits):
+    for i, (joint_M, eval_) in enumerate(eval_splits):
         # happens on the source domain when train_fraction = 1.0
         if len(eval_) == 0:
             mean_sweep = mean_sweep.at[i].set(jnp.nan)
@@ -669,15 +669,15 @@ def adapt(
             else "(unseen)"
         )
 
-        joint_YZ = jnp.array(joint_YZ)
+        joint_M = jnp.array(joint_M)
         flip_prob = jnp.array(
             [
                 [1 - dataset_label_noise, dataset_label_noise],
                 [dataset_label_noise, 1 - dataset_label_noise],
             ]
         )
-        joint = flip_prob[:, :, jnp.newaxis] * joint_YZ  # P(Y_tilde, Y, Z)
-        prob = joint / jnp.sum(joint, axis=1, keepdims=True)
+        joint = flip_prob[:, :, jnp.newaxis] * joint_M  # P(Y_tilde, Y, Z)
+        prob = joint / jnp.sum(joint, axis=(0, 2), keepdims=True)
         prob = prob[:, 1, :]  # P(Y=1|Y_tilde, Z)
 
         # using shuffle=True so that Y contains multiple classes, otherwise AUC is not defined
@@ -719,7 +719,7 @@ def adapt(
                 )
             elif label == "Oracle":
                 prior = state.prior.unfreeze()
-                prior["target"] = replicate(joint_YZ.flatten())
+                prior["target"] = replicate(joint_M.flatten())
                 state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
             elif label == "Unadapted":
                 prior = state.prior.unfreeze()
@@ -736,7 +736,7 @@ def adapt(
             epoch_score = epoch_score.at[offset:offset+N].set(score.flatten())
             hits += unreplicate(hit)
             prior = unreplicate(state.prior["target"]).reshape((C, K))
-            norm += N * jnp.linalg.norm(prior - joint_YZ)
+            norm += N * jnp.linalg.norm(prior - joint_M)
 
             offset += N
 

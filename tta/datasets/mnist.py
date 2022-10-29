@@ -72,9 +72,9 @@ class MultipleDomainMNIST(MultipleDomainDataset):
             for label in counter:
                 y_count[label] += counter[label]
             y_freq = y_count / len(labels)
-            joint_YZ = y_freq[:, np.newaxis] * conditional
+            joint_M = y_freq[:, np.newaxis] * conditional
 
-            self.domains.append((joint_YZ, domain))
+            self.domains.append((joint_M, domain))
 
 
     def shift(self, images, y_tilde, conditional):

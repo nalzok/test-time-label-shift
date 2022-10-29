@@ -12,10 +12,10 @@ debug:
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
-		--train_epochs 50 \
+		--train_epochs 2 \
 		--train_lr 1e-3 \
 		--calibration_batch_size 64 \
-		--calibration_epochs 10 \
+		--calibration_epochs 1 \
 		--calibration_lr 1e-3 \
 		--test_prior_strength 1 \
 		--test_symmetric_dirichlet False \
