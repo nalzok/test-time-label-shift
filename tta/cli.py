@@ -677,7 +677,7 @@ def adapt(
             ]
         )
         joint = flip_prob[:, :, jnp.newaxis] * joint_M  # P(Y_tilde, Y, Z)
-        prob = joint / jnp.sum(joint, axis=(0, 2), keepdims=True)
+        prob = joint / jnp.sum(joint, axis=1, keepdims=True)
         prob = prob[:, 1, :]  # P(Y=1|Y_tilde, Z)
 
         # using shuffle=True so that Y contains multiple classes, otherwise AUC is not defined
