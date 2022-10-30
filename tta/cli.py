@@ -439,7 +439,7 @@ def train(
         ), "Parameter dataset_label_noise is not supported with CheXpert"
 
         root = Path("data/CheXpert")
-        dataset = MultipleDomainCheXpert(root, generator, train_domains_set, "PNEUMONIA", "GENDER")
+        dataset = MultipleDomainCheXpert(root, generator, train_domains_set, "PNEUMONIA", "GENDER", 512)
     else:
         raise ValueError(f"Unknown dataset {dataset_name}")
 
