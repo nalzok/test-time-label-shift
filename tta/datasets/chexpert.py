@@ -17,8 +17,8 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         confounder_strength = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
         super().__init__(input_shape, C, K, confounder_strength)
 
-        if Y_column != "PNEUMONIA" or Z_column != "GENDER":
-            raise NotImplementedError(f"(Y, Z) must be (PNEUMONIA, GENDER)")
+        if Y_column != "EFFUSION" or Z_column != "GENDER":
+            raise NotImplementedError(f"(Y, Z) must be (EFFUSION, GENDER)")
 
         if len(train_domains) != 1:
             raise NotImplementedError(
@@ -47,11 +47,12 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         labels: pd.DataFrame = pd.read_csv(root / "labels.csv", index_col="image_id")
         embeddings = np.load(root / "embeddings.npz")
 
-        # 0 = no mention    - 15933
-        # 1 = positive      - 4657
-        # 2 = uncertain     - 2054
-        # 3 = negative      - 167855
-        labels = labels.loc[labels["PNEUMONIA"].isin({1, 3})]
+        #   EFFUSION
+        # 0 = no mention    - 9527
+        # 1 = positive      - 76726
+        # 2 = uncertain     - 25371
+        # 3 = negative      - 78875
+        labels = labels.loc[labels["EFFUSION"].isin({1, 3})]
         labels = labels.loc[labels["GENDER"] != "Unknown"]
 
         self.Y_column = Y_column
@@ -66,15 +67,15 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         # Z: 0 = Female, 1 = Male
 
         # joint distribution of Y and Z
-        confounder1 = np.array([[0.0, 0.025], [0.0, 0.975]])
-        confounder2 = np.array([[0.025, 0.0], [0.975, 0.0]])
+        confounder1 = np.array([[0.5, 0.0], [0.0, 0.5]])
+        confounder2 = np.array([[0.0, 0.5], [0.5, 0.0]])
 
         domains = [None for _ in confounder_strength]
 
-        # 0 = Positive, Female  - 1939
-        # 1 = Positive, Male    - 2718
-        # 2 = Negative, Female  - 69209
-        # 3 = Negative, Male    - 98645
+        # 0 = Positive, Female  - 31900
+        # 1 = Positive, Male    - 44826
+        # 2 = Negative, Female  - 32053
+        # 3 = Negative, Male    - 46822
         labels["M"] = 2 * labels[Y_column] + labels[Z_column]
         mask = np.ones(len(labels.index), dtype=bool)
 
