@@ -5,6 +5,7 @@ debug:
 		-m tta.cli \
 		--config_name debug \
 		--dataset_name CheXpert \
+		--dataset_use_embedding True \
 		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_model Linear \

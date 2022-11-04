@@ -1,17 +1,23 @@
 from hashlib import sha256
+import re
 
 import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import TensorDataset
+from PIL import Image
+import torchvision.transforms as T
 
 from . import MultipleDomainDataset
 
 
 class MultipleDomainCheXpert(MultipleDomainDataset):
 
-    def __init__(self, root, generator, train_domains, Y_column, Z_column, target_domain_count):
-        input_shape = (1, 1376)
+    def __init__(self, root, generator, use_embedding, train_domains, Y_column, Z_column, target_domain_count):
+        if use_embedding:
+            input_shape = (1, 1376)
+        else:
+            input_shape = (1, 224, 224, 1)
         C = 2
         K = 2
         confounder_strength = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
@@ -26,6 +32,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             )
 
         m = sha256()
+        m.update(str(use_embedding).encode())
         m.update(str(train_domains).encode())
         m.update(Y_column.encode())
         m.update(Z_column.encode())
@@ -42,10 +49,14 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             raise ValueError('Data directory not specified!')
 
         self.generator = generator
+        self.use_embedding = use_embedding
         self.train_domains = train_domains
 
         labels: pd.DataFrame = pd.read_csv(root / "labels.csv", index_col="image_id")
-        embeddings = np.load(root / "embeddings.npz")
+        if use_embedding:
+            datastore = np.load(root / "embeddings.npz")
+        else:
+            datastore = CheXpertImages(root)
 
         #   EFFUSION
         # 0 = no mention    - 9527
@@ -92,7 +103,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             count = count.reshape((2, 2))
             joint_M = count / torch.sum(count)
 
-            domain, in_sample = self.sample(embeddings, labels, mask, count)
+            domain, in_sample = self.sample(datastore, labels, mask, count)
             mask &= ~labels.index.isin(in_sample)
             domains[i] = (joint_M, domain)
 
@@ -127,7 +138,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             count = count.reshape((2, 2))
             joint_M = count / torch.sum(count)
 
-            domain, _ = self.sample(embeddings, labels, mask, count)
+            domain, _ = self.sample(datastore, labels, mask, count)
             domains[i] = (joint_M, domain)
 
         self.domains = domains
@@ -137,7 +148,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         torch.save(self.domains, cache_file)
 
 
-    def sample(self, embeddings, labels, mask, count):
+    def sample(self, datastore, labels, mask, count):
         in_sample = set()
 
         for Y in range(2):
@@ -156,9 +167,25 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
 
         perm = torch.randperm(N, generator=self.generator)
         for i, key in enumerate(in_sample):
-            x[perm[i]] = torch.Tensor(embeddings[key])
+            x[perm[i]] = torch.Tensor(datastore[key])
             row = labels.loc[key]
             y[perm[i]] = y_tilde[perm[i]] = row[self.Y_column]
             z_flattened[perm[i]] = row[self.Z_column]
 
         return TensorDataset(x, y_tilde, y, z_flattened), in_sample
+
+
+class CheXpertImages:
+    def __init__(self, root):
+        self.root = root
+        self.transform = T.Compose([
+            T.Resize((224, 224)),
+            T.ToTensor(),
+            T.Lambda(lambda x: x.permute(1, 2, 0)), # (C, H, W) -> (H, W, C)
+        ])
+        self.pattern = re.compile("^CheXpert-v1.0/")
+
+    def __getitem__(self, key):
+        key = re.sub(self.pattern, "CheXpert-v1.0-small/", key)
+        image = Image.open(self.root / key)
+        return self.transform(image)
