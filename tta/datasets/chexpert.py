@@ -17,7 +17,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         if use_embedding:
             input_shape = (1, 1376)
         else:
-            input_shape = (1, 224, 224, 1)
+            input_shape = (1, 224, 224, 3)
         C = 2
         K = 2
         confounder_strength = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
@@ -45,6 +45,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             self.domains = torch.load(cache_file)
             return
 
+        print(f'Building datasets... (this may take a while)')
         if root is None:
             raise ValueError('Data directory not specified!')
 
@@ -103,6 +104,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             count = count.reshape((2, 2))
             joint_M = count / torch.sum(count)
 
+            print(f"histogram(M) = {count.flatten()}")
             domain, in_sample = self.sample(datastore, labels, mask, count)
             mask &= ~labels.index.isin(in_sample)
             domains[i] = (joint_M, domain)
@@ -138,6 +140,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             count = count.reshape((2, 2))
             joint_M = count / torch.sum(count)
 
+            print(f"histogram(M) = {count.flatten()}")
             domain, _ = self.sample(datastore, labels, mask, count)
             domains[i] = (joint_M, domain)
 
