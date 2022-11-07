@@ -34,7 +34,7 @@ from .train import (
     test_step,
 )
 from .restore import restore_train_state
-from .visualize import plot_mean, plot_l1, plot_auc, plot_accuracy, plot_norm
+from .visualize import plot
 
 
 @click.command()
@@ -166,12 +166,6 @@ def main(
 
     log_path = log_root / f"{config_name}.txt"
     sys.stdout = Tee(log_path)
-
-    mean_plot_path = plot_root / f"{config_name}_mean.png"
-    l1_plot_path = plot_root / f"{config_name}_l1.png"
-    auc_plot_path = plot_root / f"{config_name}_auc.png"
-    accuracy_plot_path = plot_root / f"{config_name}_accuracy.png"
-    norm_plot_path = plot_root / f"{config_name}_norm.png"
 
     mean_npz_path = npz_root / f"{config_name}_mean.npz"
     l1_npz_path = npz_root / f"{config_name}_l1.npz"
@@ -335,46 +329,22 @@ def main(
     jnp.savez(accuracy_npz_path, **{k: v for (k, _, _), v in accuracy_sweeps.items()})
     jnp.savez(norm_npz_path, **{k: v for (k, _, _), v in norm_sweeps.items()})
 
-    plot_mean(
-        mean_sweeps,
-        train_batch_size,
-        confounder_strength,
-        train_domains_set,
-        plot_title,
-        mean_plot_path,
-    )
-    plot_l1(
-        l1_sweeps,
-        train_batch_size,
-        confounder_strength,
-        train_domains_set,
-        plot_title,
-        l1_plot_path,
-    )
-    plot_auc(
-        auc_sweeps,
-        train_batch_size,
-        confounder_strength,
-        train_domains_set,
-        plot_title,
-        auc_plot_path,
-    )
-    plot_accuracy(
-        accuracy_sweeps,
+    all_sweeps = {
+        "mean": (mean_sweeps, "Average probability of class 1"),
+        "l1": (l1_sweeps, "Average L1 error of class 1"),
+        "auc": (auc_sweeps, "Average AUC"),
+        "accuracy": (accuracy_sweeps, "Accuracy"),
+        "norm": (norm_sweeps, "Euclidean distance")
+    }
+    plot(
+        all_sweeps,
         train_batch_size,
         confounder_strength,
         train_domains_set,
         dataset_label_noise,
         plot_title,
-        accuracy_plot_path,
-    )
-    plot_norm(
-        norm_sweeps,
-        train_batch_size,
-        confounder_strength,
-        train_domains_set,
-        plot_title,
-        norm_plot_path,
+        plot_root,
+        config_name,
     )
 
     return mean_sweeps, l1_sweeps, auc_sweeps, accuracy_sweeps, norm_sweeps
