@@ -45,6 +45,7 @@ from .visualize import plot_mean, plot_l1, plot_auc, plot_accuracy, plot_norm
 @click.option("--dataset_use_embedding", type=bool, required=True)
 @click.option("--dataset_apply_rotation", type=bool, required=True)
 @click.option("--dataset_label_noise", type=float, required=True)
+@click.option("--train_joint", type=bool, required=True)
 @click.option("--train_model", type=str, required=True)
 @click.option(
     "--train_checkpoint_path", type=click.Path(path_type=Path), required=False
@@ -75,6 +76,7 @@ def cli(
     dataset_use_embedding: bool,
     dataset_apply_rotation: bool,
     dataset_label_noise: float,
+    train_joint: bool,
     train_model: str,
     train_checkpoint_path: Optional[Path],
     train_domains: str,
@@ -102,6 +104,7 @@ def cli(
         dataset_use_embedding,
         dataset_apply_rotation,
         dataset_label_noise,
+        train_joint,
         train_model,
         train_checkpoint_path,
         train_domains,
@@ -131,6 +134,7 @@ def main(
     dataset_use_embedding: bool,
     dataset_apply_rotation: bool,
     dataset_label_noise: float,
+    train_joint: bool,
     train_model: str,
     train_checkpoint_path: Optional[Path],
     train_domains: str,
@@ -229,6 +233,7 @@ def main(
         dataset_use_embedding,
         dataset_apply_rotation,
         dataset_label_noise,
+        train_joint,
         train_model,
         train_checkpoint_path,
         train_domains_set,
@@ -380,6 +385,7 @@ def train(
     dataset_use_embedding: bool,
     dataset_apply_rotation: bool,
     dataset_label_noise: float,
+    train_joint: bool,
     train_model: str,
     train_checkpoint_path: Optional[Path],
     train_domains_set: Set[int],
@@ -507,7 +513,7 @@ def train(
             Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
             M = Y * K + Z
 
-            state, (loss, hit, total) = train_step(state, X, M)
+            state, (loss, hit, total) = train_step(state, X, M, K, train_joint)
             epoch_loss += unreplicate(loss)
             epoch_hit += unreplicate(hit)
             epoch_total += unreplicate(total)
@@ -542,7 +548,7 @@ def train(
                 Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
                 M = Y * K + Z
 
-                state, (loss, hit, total) = calibration_step(state, X, M, calibration_lr)
+                state, (loss, hit, total) = calibration_step(state, X, M, K, train_joint, calibration_lr)
                 epoch_loss += unreplicate(loss)
                 epoch_hit += unreplicate(hit)
                 epoch_total += unreplicate(total)

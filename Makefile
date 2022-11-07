@@ -3,11 +3,12 @@
 debug:
 	pipenv run python3 \
 		-m tta.cli \
-		--config_name debug \
+		--config_name resnet50_500_0_init \
 		--dataset_name CheXpert \
 		--dataset_use_embedding False \
 		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
+		--train_joint True \
 		--train_model ResNet50 \
 		--train_checkpoint_path pretrained/ResNet50_ImageNet1k \
 		--train_domains 9 \
@@ -17,7 +18,7 @@ debug:
 		--train_epochs 500 \
 		--train_lr 1e-3 \
 		--calibration_batch_size 64 \
-		--calibration_epochs 100 \
+		--calibration_epochs 0 \
 		--calibration_lr 1e-3 \
 		--test_prior_strength 1 \
 		--test_symmetric_dirichlet False \
