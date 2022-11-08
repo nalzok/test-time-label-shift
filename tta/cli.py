@@ -42,6 +42,8 @@ from .visualize import plot
 @click.option(
     "--dataset_name", type=click.Choice(["MNIST", "COCO", "Waterbirds", "CheXpert"]), required=True
 )
+@click.option("--dataset_Y_column", type=str, required=True)
+@click.option("--dataset_Z_column", type=str, required=True)
 @click.option("--dataset_use_embedding", type=bool, required=True)
 @click.option("--dataset_apply_rotation", type=bool, required=True)
 @click.option("--dataset_label_noise", type=float, required=True)
@@ -73,6 +75,8 @@ from .visualize import plot
 def cli(
     config_name: str,
     dataset_name: str,
+    dataset_y_column: str,
+    dataset_z_column: str,
     dataset_use_embedding: bool,
     dataset_apply_rotation: bool,
     dataset_label_noise: float,
@@ -101,6 +105,8 @@ def cli(
     main(
         config_name,
         dataset_name,
+        dataset_y_column,
+        dataset_z_column,
         dataset_use_embedding,
         dataset_apply_rotation,
         dataset_label_noise,
@@ -131,6 +137,8 @@ def cli(
 def main(
     config_name: str,
     dataset_name: str,
+    dataset_y_column: str,
+    dataset_z_column: str,
     dataset_use_embedding: bool,
     dataset_apply_rotation: bool,
     dataset_label_noise: float,
@@ -166,12 +174,6 @@ def main(
 
     log_path = log_root / f"{config_name}.txt"
     sys.stdout = Tee(log_path)
-
-    mean_npz_path = npz_root / f"{config_name}_mean.npz"
-    l1_npz_path = npz_root / f"{config_name}_l1.npz"
-    auc_npz_path = npz_root / f"{config_name}_auc.npz"
-    accuracy_npz_path = npz_root / f"{config_name}_accuracy.npz"
-    norm_npz_path = npz_root / f"{config_name}_norm.npz"
 
     device_count = jax.local_device_count()
     assert (
@@ -224,6 +226,8 @@ def main(
         unadapted_sweep,
     ) = train(
         dataset_name,
+        dataset_y_column,
+        dataset_z_column,
         dataset_use_embedding,
         dataset_apply_rotation,
         dataset_label_noise,
@@ -305,7 +309,7 @@ def main(
             generator,
             num_workers,
         )
-        key = label, (prior_strength, symmetric_dirichlet, fix_marginal), batch_size
+        key = label, scheme, batch_size
         mean_sweeps[key] = mean_sweep
         l1_sweeps[key] = l1_sweep
         auc_sweeps[key] = auc_sweep
@@ -323,12 +327,6 @@ def main(
     print("===> norm_sweeps")
     pprint(norm_sweeps)
 
-    jnp.savez(mean_npz_path, **{k: v for (k, _, _), v in mean_sweeps.items()})
-    jnp.savez(l1_npz_path, **{k: v for (k, _, _), v in l1_sweeps.items()})
-    jnp.savez(auc_npz_path, **{k: v for (k, _, _), v in auc_sweeps.items()})
-    jnp.savez(accuracy_npz_path, **{k: v for (k, _, _), v in accuracy_sweeps.items()})
-    jnp.savez(norm_npz_path, **{k: v for (k, _, _), v in norm_sweeps.items()})
-
     all_sweeps = {
         "mean": (mean_sweeps, "Average probability of class 1"),
         "l1": (l1_sweeps, "Average L1 error of class 1"),
@@ -336,6 +334,14 @@ def main(
         "accuracy": (accuracy_sweeps, "Accuracy"),
         "norm": (norm_sweeps, "Euclidean distance")
     }
+
+    npz_path = npz_root / f"{config_name}.npz"
+    jnp.savez(npz_path, **{
+        sweep_type: sweeps
+        for sweep_type, (sweeps, _)
+        in all_sweeps.items()
+    })
+
     plot(
         all_sweeps,
         train_batch_size,
@@ -352,6 +358,8 @@ def main(
 
 def train(
     dataset_name: str,
+    dataset_y_column: str,
+    dataset_z_column: str,
     dataset_use_embedding: bool,
     dataset_apply_rotation: bool,
     dataset_label_noise: float,
@@ -421,7 +429,8 @@ def train(
         ), "Parameter dataset_label_noise is not supported with CheXpert"
 
         root = Path("data/CheXpert")
-        dataset = MultipleDomainCheXpert(root, generator, dataset_use_embedding, train_domains_set, "EFFUSION", "GENDER", 512)
+        target_domain_count = 512
+        dataset = MultipleDomainCheXpert(root, generator, dataset_y_column, dataset_z_column, dataset_use_embedding, train_domains_set, target_domain_count)
     else:
         raise ValueError(f"Unknown dataset {dataset_name}")
 

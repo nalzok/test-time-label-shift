@@ -1,4 +1,4 @@
-from typing import Set, Union
+from typing import Set, Union, Dict, Tuple
 
 from pathlib import Path
 import numpy as np
@@ -8,7 +8,7 @@ from .common import Curves
 
 
 def plot(
-    all_sweeps: Curves,
+    all_sweeps: Dict[str, Tuple[Curves, str]],
     train_batch_size: int,
     confounder_strength: np.ndarray,
     train_domains_set: Set[int],
@@ -17,10 +17,10 @@ def plot(
     plot_root: Path,
     config_name: str,
 ):
-    for plot_type, (sweeps, ylabel) in all_sweeps.items():
+    for sweep_type, (sweeps, ylabel) in all_sweeps.items():
         fig, ax = plt.subplots(figsize=(12, 6))
 
-        if plot_type == "accuracy":
+        if sweep_type == "accuracy":
             if dataset_label_noise > 0:
                 upper_bound = bayes_accuracy(dataset_label_noise, confounder_strength)
                 ax.plot(
@@ -52,7 +52,8 @@ def plot(
         plt.legend()
 
         for suffix in ("png", "pdf"):
-            plt.savefig(plot_root / f"{config_name}_{plot_type}.{suffix}", dpi=300)
+            plt.savefig(plot_root / f"{config_name}_{sweep_type}.{suffix}", dpi=300)
+
         plt.close(fig)
 
 

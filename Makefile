@@ -3,8 +3,10 @@
 debug:
 	pipenv run python3 \
 		-m tta.cli \
-		--config_name linear_5_1_joint \
+		--config_name pneumonia_100_20_relaxed \
 		--dataset_name CheXpert \
+		--dataset_Y_column PNEUMONIA \
+		--dataset_Z_column GENDER \
 		--dataset_use_embedding True \
 		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
@@ -14,15 +16,15 @@ debug:
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
-		--train_epochs 5 \
+		--train_epochs 100 \
 		--train_lr 1e-3 \
 		--calibration_batch_size 64 \
-		--calibration_epochs 1 \
+		--calibration_epochs 20 \
 		--calibration_lr 1e-3 \
 		--test_prior_strength 1 \
 		--test_symmetric_dirichlet False \
 		--test_symmetric_dirichlet True \
-		--test_fix_marginal True \
+		--test_fix_marginal False \
 		--test_batch_size 512 \
 		--seed 2022 \
 		--num_workers 48
