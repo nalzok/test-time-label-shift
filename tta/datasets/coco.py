@@ -7,7 +7,6 @@ import torch
 from torch.utils.data import TensorDataset
 from torchvision.transforms import ToTensor
 from PIL import Image
-from pycocotools.coco import COCO
 
 from . import MultipleDomainDataset
 
@@ -57,6 +56,7 @@ class ColoredCOCO(MultipleDomainDataset):
         if root is None:
             raise ValueError('Data directory not specified!')
 
+        from pycocotools.coco import COCO
         self.root = root
         self.coco = COCO(annFile)
 

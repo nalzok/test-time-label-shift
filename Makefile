@@ -1,7 +1,7 @@
 .PHONY: debug sweep mnist
 
 small:
-	python3 \
+	pipenv run python3 \
 		-m tta.cli \
 		--config_name pneumonia_small \
 		--dataset_name CheXpert \
@@ -21,10 +21,11 @@ small:
 		--calibration_batch_size 64 \
 		--calibration_epochs 2 \
 		--calibration_lr 1e-3 \
-		--test_prior_strength 1 \
-		--test_symmetric_dirichlet False \
-		--test_symmetric_dirichlet True \
-		--test_fix_marginal False \
+		--adapt_prior_strength 1 \
+		--adapt_symmetric_dirichlet False \
+		--adapt_fix_marginal False \
+		--test_argmax_joint True \
+		--test_argmax_joint False \
 		--test_batch_size 512 \
 		--seed 2022 \
 		--num_workers 48
@@ -50,10 +51,11 @@ debug:
 		--calibration_batch_size 64 \
 		--calibration_epochs 20 \
 		--calibration_lr 1e-3 \
-		--test_prior_strength 1 \
-		--test_symmetric_dirichlet False \
-		--test_symmetric_dirichlet True \
-		--test_fix_marginal False \
+		--adapt_prior_strength 1 \
+		--adapt_symmetric_dirichlet False \
+		--adapt_symmetric_dirichlet True \
+		--adapt_fix_marginal False \
+		--test_argmax_joint True \
 		--test_batch_size 512 \
 		--seed 2022 \
 		--num_workers 48

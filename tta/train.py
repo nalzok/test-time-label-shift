@@ -159,7 +159,7 @@ def adapt_step(state: TrainState, X: jnp.ndarray, prior_strength: float,
     if symmetric_dirichlet:
         alpha = jnp.ones(M)
     else:
-        alpha = source_prior * M
+        alpha = jax.tree_util.tree_map(lambda x: x * M, source_prior)
     alpha = prior_strength * alpha
 
     variables = {
@@ -218,8 +218,8 @@ def adapt_step(state: TrainState, X: jnp.ndarray, prior_strength: float,
     return state
 
  
-@partial(jax.pmap, axis_name='batch')
-def test_step(state: TrainState, image: jnp.ndarray, Y: jnp.ndarray, Z: jnp.ndarray) \
+@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(4,))
+def test_step(state: TrainState, image: jnp.ndarray, Y: jnp.ndarray, Z: jnp.ndarray, argmax_joint: bool) \
         -> Tuple[Tuple[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]:
     variables = {
         'params': state.params,
@@ -228,15 +228,25 @@ def test_step(state: TrainState, image: jnp.ndarray, Y: jnp.ndarray, Z: jnp.ndar
     }
 
     prob_joint = state.apply_fn(variables, image, False)
+    _, C, K = prob_joint.shape
+    if (C, K) != (2, 2):
+        raise NotImplementedError(f"(C, K) = {(C, K)} != (2, 2)")
 
     prob_Y = jnp.sum(prob_joint, axis=-1)
-    score_Y = prob_Y[:, 1]   # assumes binary label
-    prediction_Y = jnp.argmax(prob_Y, axis=-1)
-    hit_Y = jax.lax.psum(jnp.sum(prediction_Y == Y), axis_name='batch')
-
     prob_Z = jnp.sum(prob_joint, axis=-2)
+
+    if argmax_joint:
+        prediction_M = jnp.argmax(prob_joint)
+        prediction_Y = prediction_M // 2
+        prediction_Z = prediction_M % 2
+    else:
+        prediction_Y = jnp.argmax(prob_Y, axis=-1)
+        prediction_Z = jnp.argmax(prob_Z, axis=-1)
+
+    score_Y = prob_Y[:, 1]   # assumes binary label
     score_Z = prob_Z[:, 1]   # assumes binary label
-    prediction_Z = jnp.argmax(prob_Z, axis=-1)
+
+    hit_Y = jax.lax.psum(jnp.sum(prediction_Y == Y), axis_name='batch')
     hit_Z = jax.lax.psum(jnp.sum(prediction_Z == Z), axis_name='batch')
 
     return (score_Y, hit_Y), (score_Z, hit_Z)
