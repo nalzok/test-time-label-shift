@@ -2,7 +2,6 @@ from collections import Counter
 import numpy as np
 import torch
 from torchvision import transforms as T
-from wilds.datasets.waterbirds_dataset import WaterbirdsDataset
 
 from . import MultipleDomainDataset
 
@@ -23,6 +22,7 @@ class MultipleDomainWaterbirds(MultipleDomainDataset):
 
         self.generator = generator
 
+        from wilds.datasets.waterbirds_dataset import WaterbirdsDataset
         self.waterbirds = WaterbirdsDataset(root_dir=root)
 
         # make Z compliant in shape

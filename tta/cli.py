@@ -16,7 +16,7 @@ from torch.utils.data import Dataset, DataLoader
 import click
 from sklearn.metrics import roc_auc_score
 
-from .common import Curves, Sweeps
+from .common import Scheme, Curves, Sweeps
 from .utils import Tee
 from .datasets import split
 from .datasets.mnist import MultipleDomainMNIST
@@ -63,9 +63,10 @@ from .visualize import plot
 @click.option("--calibration_batch_size", type=int, required=True)
 @click.option("--calibration_epochs", type=int, required=True)
 @click.option("--calibration_lr", type=float, required=True)
-@click.option("--test_prior_strength", type=float, required=False, multiple=True)
-@click.option("--test_symmetric_dirichlet", type=bool, required=False, multiple=True)
-@click.option("--test_fix_marginal", type=bool, required=False, multiple=True)
+@click.option("--adapt_prior_strength", type=float, required=False, multiple=True)
+@click.option("--adapt_symmetric_dirichlet", type=bool, required=False, multiple=True)
+@click.option("--adapt_fix_marginal", type=bool, required=False, multiple=True)
+@click.option("--test_argmax_joint", type=bool, required=True, multiple=True)
 @click.option("--test_batch_size", type=int, required=True, multiple=True)
 @click.option(
     "--plot_title", type=str, required=False, default="Performance on Each Domain"
@@ -94,9 +95,10 @@ def cli(
     calibration_batch_size: int,
     calibration_epochs: int,
     calibration_lr: float,
-    test_prior_strength: Sequence[float],
-    test_symmetric_dirichlet: Sequence[bool],
-    test_fix_marginal: Sequence[bool],
+    adapt_prior_strength: Sequence[float],
+    adapt_symmetric_dirichlet: Sequence[bool],
+    adapt_fix_marginal: Sequence[bool],
+    test_argmax_joint: Sequence[bool],
     test_batch_size: Sequence[int],
     plot_title: str,
     seed: int,
@@ -124,9 +126,10 @@ def cli(
         calibration_batch_size,
         calibration_epochs,
         calibration_lr,
-        test_prior_strength,
-        test_symmetric_dirichlet,
-        test_fix_marginal,
+        adapt_prior_strength,
+        adapt_symmetric_dirichlet,
+        adapt_fix_marginal,
+        test_argmax_joint,
         test_batch_size,
         plot_title,
         seed,
@@ -156,9 +159,10 @@ def main(
     calibration_batch_size: int,
     calibration_epochs: int,
     calibration_lr: float,
-    test_prior_strength: Sequence[float],
-    test_symmetric_dirichlet: Sequence[bool],
-    test_fix_marginal: Sequence[bool],
+    adapt_prior_strength: Sequence[float],
+    adapt_symmetric_dirichlet: Sequence[bool],
+    adapt_fix_marginal: Sequence[bool],
+    test_argmax_joint: Sequence[bool],
     test_batch_size: Sequence[int],
     plot_title: str,
     seed: int,
@@ -286,13 +290,14 @@ def main(
         ("Unadapted", None, train_batch_size): unadapted_norm_sweep,
     }
 
-    for prior_strength, symmetric_dirichlet, fix_marginal, batch_size in product(
-        test_prior_strength,
-        test_symmetric_dirichlet,
-        test_fix_marginal,
+    for prior_strength, symmetric_dirichlet, fix_marginal, argmax_joint, batch_size in product(
+        adapt_prior_strength,
+        adapt_symmetric_dirichlet,
+        adapt_fix_marginal,
+        test_argmax_joint,
         test_batch_size,
     ):
-        label = f"{prior_strength=} | {symmetric_dirichlet=} | {fix_marginal=} | {batch_size=}"
+        label = f"{prior_strength=} | {symmetric_dirichlet=} | {fix_marginal=} | {argmax_joint=} | {batch_size=}"
         scheme = (prior_strength, symmetric_dirichlet, fix_marginal)
         state, (mean_sweep, l1_sweep, auc_sweep, accuracy_sweep, norm_sweep) = adapt(
             state,
@@ -303,6 +308,7 @@ def main(
             calibration_domains_set,
             eval_splits,
             scheme,
+            argmax_joint,
             batch_size,
             label,
             device_count,
@@ -586,6 +592,7 @@ def train(
         calibration_domains_set,
         eval_splits,
         None,
+        False,
         train_batch_size,
         label,
         device_count,
@@ -602,6 +609,7 @@ def train(
         calibration_domains_set,
         eval_splits,
         None,
+        False,
         train_batch_size,
         label,
         device_count,
@@ -628,7 +636,8 @@ def adapt(
     train_domains_set: Set[int],
     calibration_domains_set: Set[int],
     eval_splits: Sequence[Tuple[torch.Tensor, Dataset]],
-    scheme: Optional[Tuple[float, bool, bool]],
+    scheme: Optional[Scheme],
+    argmax_joint: bool,
     batch_size: int,
     label: str,
     device_count: int,
@@ -719,7 +728,7 @@ def adapt(
             else:
                 raise ValueError(f"Unknown adaptation scheme {label}")
 
-            (score, hit), (_, _) = test_step(state, X, Y, Z)
+            (score, hit), (_, _) = test_step(state, X, Y, Z, argmax_joint)
 
             mean += jnp.sum(score)
             l1 += jnp.sum(jnp.abs(score.flatten() - prob[Y_tilde, Z.flatten()]))
