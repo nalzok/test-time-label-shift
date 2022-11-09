@@ -2,9 +2,9 @@ import jax
 import jax.numpy as jnp
 from flax import linen as nn
 
-from .linear import Linear
-from .lenet import LeNet
-from .resnet import ResNet
+from tta.models.linear import Linear
+from tta.models.lenet import LeNet
+from tta.models.resnet import ResNet
 
 
 class AdaptiveNN(nn.Module):

@@ -7,7 +7,7 @@ from torchvision.datasets import MNIST
 from torchvision import transforms as T
 from PIL import Image
 
-from . import MultipleDomainDataset
+from tta.datasets import MultipleDomainDataset
 
 
 class MultipleDomainMNIST(MultipleDomainDataset):

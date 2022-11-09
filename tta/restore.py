@@ -6,7 +6,7 @@ import logging
 import flax
 from flax.training.checkpoints import restore_checkpoint, convert_pre_linen
 
-from .train import TrainState
+from tta.train import TrainState
 
 
 # JAX team is working on type annotation for pytree:

@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import ConcatDataset
 
-from ..utils import Dataset, split_dataset
+from tta.utils import Dataset, split_dataset
 
 
 class MultipleDomainDataset:

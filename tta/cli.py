@@ -16,14 +16,14 @@ from torch.utils.data import Dataset, DataLoader
 import click
 from sklearn.metrics import roc_auc_score
 
-from .common import Scheme, Curves, Sweeps
-from .utils import Tee
-from .datasets import split
-from .datasets.mnist import MultipleDomainMNIST
-from .datasets.coco import ColoredCOCO
-from .datasets.waterbirds import MultipleDomainWaterbirds
-from .datasets.chexpert import MultipleDomainCheXpert
-from .train import (
+from tta.common import Scheme, Curves, Sweeps
+from tta.utils import Tee
+from tta.datasets import split
+from tta.datasets.mnist import MultipleDomainMNIST
+from tta.datasets.coco import ColoredCOCO
+from tta.datasets.waterbirds import MultipleDomainWaterbirds
+from tta.datasets.chexpert import MultipleDomainCheXpert
+from tta.train import (
     TrainState,
     create_train_state,
     train_step,
@@ -33,8 +33,8 @@ from .train import (
     adapt_step,
     test_step,
 )
-from .restore import restore_train_state
-from .visualize import plot
+from tta.restore import restore_train_state
+from tta.visualize import plot
 
 
 @click.command()

@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torchvision import transforms as T
 
-from . import MultipleDomainDataset
+from tta.datasets import MultipleDomainDataset
 
 
 class MultipleDomainWaterbirds(MultipleDomainDataset):

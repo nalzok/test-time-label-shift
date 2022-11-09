@@ -8,7 +8,7 @@ from torch.utils.data import TensorDataset
 from PIL import Image
 import torchvision.transforms as T
 
-from . import MultipleDomainDataset
+from tta.datasets import MultipleDomainDataset
 
 
 class MultipleDomainCheXpert(MultipleDomainDataset):

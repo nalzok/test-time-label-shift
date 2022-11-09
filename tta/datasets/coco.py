@@ -8,7 +8,7 @@ from torch.utils.data import TensorDataset
 from torchvision.transforms import ToTensor
 from PIL import Image
 
-from . import MultipleDomainDataset
+from tta.datasets import MultipleDomainDataset
 
 
 class ColoredCOCO(MultipleDomainDataset):

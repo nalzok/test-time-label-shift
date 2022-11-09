@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .common import Curves
+from tta.common import Curves
 
 
 def plot(

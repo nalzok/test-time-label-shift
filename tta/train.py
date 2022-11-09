@@ -8,7 +8,7 @@ from flax.training import train_state
 from flax.struct import field
 import optax
 
-from .models import AdaptiveNN
+from tta.models import AdaptiveNN
 
 
 class TrainState(train_state.TrainState):
