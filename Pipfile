@@ -16,7 +16,7 @@ matplotlib = "*"
 tensorflow-cpu = "*"
 
 [dev-packages]
-black = "*"
+black = {extras = ["jupyter"]}
 
 [requires]
 python_version = "3.10"

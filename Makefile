@@ -16,10 +16,10 @@ small:
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
-		--train_epochs 2 \
+		--train_epochs 1 \
 		--train_lr 1e-3 \
 		--calibration_batch_size 64 \
-		--calibration_epochs 2 \
+		--calibration_epochs 1 \
 		--calibration_lr 1e-3 \
 		--adapt_prior_strength 1 \
 		--adapt_symmetric_dirichlet False \
@@ -30,19 +30,22 @@ small:
 		--seed 2022 \
 		--num_workers 48
 
+tree:
+	pipenv run python3 -m tree
+
 debug:
 	pipenv run python3 \
 		-m tta.cli \
-		--config_name pneumonia_100_20_relaxed \
+		--config_name effusion_100_20_balanced \
 		--dataset_name CheXpert \
-		--dataset_Y_column PNEUMONIA \
+		--dataset_Y_column EFFUSION \
 		--dataset_Z_column GENDER \
 		--dataset_use_embedding True \
 		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 9 \
+		--train_domains 5 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
@@ -53,8 +56,8 @@ debug:
 		--calibration_lr 1e-3 \
 		--adapt_prior_strength 1 \
 		--adapt_symmetric_dirichlet False \
-		--adapt_symmetric_dirichlet True \
 		--adapt_fix_marginal False \
+		--test_argmax_joint False \
 		--test_argmax_joint True \
 		--test_batch_size 512 \
 		--seed 2022 \
