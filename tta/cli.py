@@ -34,7 +34,7 @@ from tta.train import (
     test_step,
 )
 from tta.restore import restore_train_state
-from tta.visualize import plot
+from tta.visualize import latexify, plot
 
 
 @click.command()
@@ -259,14 +259,18 @@ def main(
         oracle_mean_sweep,
         oracle_l1_sweep,
         oracle_auc_sweep,
+        oracle_auc_Z_sweep,
         oracle_accuracy_sweep,
+        oracle_accuracy_Z_sweep,
         oracle_norm_sweep,
     ) = oracle_sweep
     (
         unadapted_mean_sweep,
         unadapted_l1_sweep,
         unadapted_auc_sweep,
+        unadapted_auc_Z_sweep,
         unadapted_accuracy_sweep,
+        unadapted_accuracy_Z_sweep,
         unadapted_norm_sweep,
     ) = unadapted_sweep
     mean_sweeps: Curves = {
@@ -281,9 +285,17 @@ def main(
         ("Oracle", None, train_batch_size): oracle_auc_sweep,
         ("Unadapted", None, train_batch_size): unadapted_auc_sweep,
     }
+    auc_Z_sweeps: Curves = {
+        ("Oracle", None, train_batch_size): oracle_auc_Z_sweep,
+        ("Unadapted", None, train_batch_size): unadapted_auc_Z_sweep,
+    }
     accuracy_sweeps: Curves = {
         ("Oracle", None, train_batch_size): oracle_accuracy_sweep,
         ("Unadapted", None, train_batch_size): unadapted_accuracy_sweep,
+    }
+    accuracy_Z_sweeps: Curves = {
+        ("Oracle", None, train_batch_size): oracle_accuracy_Z_sweep,
+        ("Unadapted", None, train_batch_size): unadapted_accuracy_Z_sweep,
     }
     norm_sweeps: Curves = {
         ("Oracle", None, train_batch_size): oracle_norm_sweep,
@@ -299,7 +311,7 @@ def main(
     ):
         label = f"{prior_strength=} | {symmetric_dirichlet=} | {fix_marginal=} | {argmax_joint=} | {batch_size=}"
         scheme = (prior_strength, symmetric_dirichlet, fix_marginal)
-        state, (mean_sweep, l1_sweep, auc_sweep, accuracy_sweep, norm_sweep) = adapt(
+        state, (mean_sweep, l1_sweep, auc_sweep, auc_Z_sweep, accuracy_sweep, accuracy_Z_sweep, norm_sweep) = adapt(
             state,
             C,
             K,
@@ -319,7 +331,9 @@ def main(
         mean_sweeps[key] = mean_sweep
         l1_sweeps[key] = l1_sweep
         auc_sweeps[key] = auc_sweep
+        auc_Z_sweeps[key] = auc_Z_sweep
         accuracy_sweeps[key] = accuracy_sweep
+        accuracy_Z_sweeps[key] = accuracy_Z_sweep
         norm_sweeps[key] = norm_sweep
 
     print("===> mean_sweeps")
@@ -328,8 +342,12 @@ def main(
     pprint(l1_sweeps)
     print("===> auc_sweeps")
     pprint(auc_sweeps)
+    print("===> auc_Z_sweeps")
+    pprint(auc_Z_sweeps)
     print("===> accuracy_sweeps")
     pprint(accuracy_sweeps)
+    print("===> accuracy_Z_sweeps")
+    pprint(accuracy_Z_sweeps)
     print("===> norm_sweeps")
     pprint(norm_sweeps)
 
@@ -337,7 +355,9 @@ def main(
         "mean": (mean_sweeps, "Average probability of class 1"),
         "l1": (l1_sweeps, "Average L1 error of class 1"),
         "auc": (auc_sweeps, "Average AUC"),
+        "auc_Z": (auc_Z_sweeps, "Average AUC (Z)"),
         "accuracy": (accuracy_sweeps, "Accuracy"),
+        "accuracy_Z": (accuracy_Z_sweeps, "Accuracy (Z)"),
         "norm": (norm_sweeps, "Euclidean distance")
     }
 
@@ -649,7 +669,9 @@ def adapt(
     mean_sweep = jnp.empty(len(eval_splits))
     l1_sweep = jnp.empty(len(eval_splits))
     auc_sweep = jnp.empty(len(eval_splits))
+    auc_Z_sweep = jnp.empty(len(eval_splits))
     accuracy_sweep = jnp.empty(len(eval_splits))
+    accuracy_Z_sweep = jnp.empty(len(eval_splits))
     norm_sweep = jnp.empty(len(eval_splits))
     for i, (joint_M, eval_) in enumerate(eval_splits):
         # happens on the source domain when train_fraction = 1.0
@@ -657,7 +679,9 @@ def adapt(
             mean_sweep = mean_sweep.at[i].set(jnp.nan)
             l1_sweep = l1_sweep.at[i].set(jnp.nan)
             auc_sweep = auc_sweep.at[i].set(jnp.nan)
+            auc_Z_sweep = auc_Z_sweep.at[i].set(jnp.nan)
             accuracy_sweep = accuracy_sweep.at[i].set(jnp.nan)
+            accuracy_Z_sweep = accuracy_Z_sweep.at[i].set(jnp.nan)
             norm_sweep = norm_sweep.at[i].set(jnp.nan)
             continue
 
@@ -681,9 +705,11 @@ def adapt(
         prob = prob[:, 1, :]  # P(Y=1|Y_tilde, Z)
 
         # using shuffle=True so that Y contains multiple classes, otherwise AUC is not defined
-        mean = l1 = hits = norm = 0
+        mean = l1 = hits = hits_Z = norm = 0
         epoch_Y = jnp.empty(len(eval_) // device_count * device_count)
         epoch_score = jnp.empty(len(eval_) // device_count * device_count)
+        epoch_Z = jnp.empty(len(eval_) // device_count * device_count)
+        epoch_score_Z = jnp.empty(len(eval_) // device_count * device_count)
         offset = 0
 
         eval_loader = DataLoader(
@@ -705,6 +731,9 @@ def adapt(
             Y_tilde = jnp.array(Y_tilde)
             Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
             Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
+
+            epoch_Y = epoch_Y.at[offset:offset+N].set(Y.flatten())
+            epoch_Z = epoch_Z.at[offset:offset+N].set(Z.flatten())
 
             if isinstance(scheme, tuple):
                 prior_strength, symmetric_dirichlet, fix_marginal = scheme
@@ -728,13 +757,14 @@ def adapt(
             else:
                 raise ValueError(f"Unknown adaptation scheme {label}")
 
-            (score, hit), (_, _) = test_step(state, X, Y, Z, argmax_joint)
+            (score, hit), (score_Z, hit_Z) = test_step(state, X, Y, Z, argmax_joint)
 
             mean += jnp.sum(score)
             l1 += jnp.sum(jnp.abs(score.flatten() - prob[Y_tilde, Z.flatten()]))
-            epoch_Y = epoch_Y.at[offset:offset+N].set(Y.flatten())
             epoch_score = epoch_score.at[offset:offset+N].set(score.flatten())
+            epoch_score_Z = epoch_score.at[offset:offset+N].set(score_Z.flatten())
             hits += unreplicate(hit)
+            hits_Z += unreplicate(hit_Z)
             prior = unreplicate(state.prior["target"]).reshape((C, K))
             norm += N * jnp.linalg.norm(prior - joint_M)
 
@@ -743,30 +773,34 @@ def adapt(
         mean = mean / len(eval_)
         l1 = l1 / len(eval_)
         auc = roc_auc_score(epoch_Y, epoch_score)
+        auc_Z = roc_auc_score(epoch_Z, epoch_score_Z)
         accuracy = hits / len(eval_)
+        accuracy_Z = hits_Z / len(eval_)
         norm = norm / len(eval_)
 
         with jnp.printoptions(precision=4):
             print(
-                f"[{label}] Environment {i:>2} {seen} mean {mean}, L1 {l1}, AUC {auc}, Accuracy {accuracy}, Norm {norm}"
+                f"[{label}] Environment {i:>2} {seen} mean {mean}, L1 {l1}, AUC {auc} ({auc_Z}), Accuracy {accuracy} ({accuracy_Z}), Norm {norm}"
             )
 
         # note that foo_sweep.at[-1] is the training foo
         mean_sweep = mean_sweep.at[i].set(mean)
         l1_sweep = l1_sweep.at[i].set(l1)
         auc_sweep = auc_sweep.at[i].set(auc)
+        auc_Z_sweep = auc_Z_sweep.at[i].set(auc_Z)
         accuracy_sweep = accuracy_sweep.at[i].set(accuracy)
+        accuracy_Z_sweep = accuracy_Z_sweep.at[i].set(accuracy_Z)
         norm_sweep = norm_sweep.at[i].set(norm)
 
     print(
         f"[{label}] Average response {jnp.nanmean(mean_sweep[:-1])}, "
         f"Average L1 {jnp.nanmean(l1_sweep[:-1])}, "
-        f"Average AUC {jnp.nanmean(auc_sweep[:-1])}, "
-        f"Accuracy {jnp.nanmean(accuracy_sweep[:-1])}, "
+        f"Average AUC {jnp.nanmean(auc_sweep[:-1])} ({jnp.nanmean(auc_Z_sweep[:-1])}), "
+        f"Accuracy {jnp.nanmean(accuracy_sweep[:-1])} ({jnp.nanmean(accuracy_Z_sweep[:-1])}), "
         f"Norm {jnp.nanmean(norm_sweep[:-1])}"
     )
 
-    return state, (mean_sweep, l1_sweep, auc_sweep, accuracy_sweep, norm_sweep)
+    return state, (mean_sweep, l1_sweep, auc_sweep, auc_Z_sweep, accuracy_sweep, accuracy_Z_sweep, norm_sweep)
 
 
 def estimate_source_prior(
@@ -817,4 +851,5 @@ def estimate_source_prior(
 
 if __name__ == "__main__":
     initialize_cache("jit_cache")
+    # latexify(width_scale_factor=2, fig_height=2)
     cli()

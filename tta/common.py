@@ -10,4 +10,4 @@ Curves = Dict[
     jnp.ndarray,
 ]
 
-Sweeps = Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]
+Sweeps = Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]
