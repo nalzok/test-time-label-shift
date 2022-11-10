@@ -397,7 +397,7 @@ def train(
     Sweeps,
 ]:
     if dataset_name == "MNIST":
-        root = Path("data/")
+        root = Path("data/mnist")
         dataset = MultipleDomainMNIST(
             root,
             generator,

@@ -1,5 +1,7 @@
 # Forked from https://github.com/facebookresearch/DomainBed/blob/main/domainbed/datasets.py
 from collections import Counter
+from hashlib import sha256
+
 import numpy as np
 import torch
 from torch.utils.data import TensorDataset
@@ -29,13 +31,25 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         confounder_strength = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
         super().__init__(input_shape, C, K, confounder_strength)
 
-        self.train_domains = train_domains
-        self.label_noise = label_noise
+        m = sha256()
+        m.update(str(train_domains).encode())
+        m.update(str(apply_rotation).encode())
+        m.update(str(label_noise).encode())
+        cache_key = m.hexdigest()
+        cache_file = root / 'cached' / f'{cache_key}.pt'
+        if cache_file.is_file():
+            # NOTE: The torch.Generator state won't be the same if we load from cache
+            print(f'Loading cached datasets from {cache_file}')
+            self.domains = torch.load(cache_file)
+            return
 
+        print(f'Building datasets... (this may take a while)')
         if root is None:
             raise ValueError('Data directory not specified!')
 
         self.generator = generator
+        self.train_domains = train_domains
+        self.label_noise = label_noise
 
         original_dataset_tr = MNIST(root, train=True, download=False)
         original_dataset_te = MNIST(root, train=False, download=False)
@@ -75,6 +89,10 @@ class MultipleDomainMNIST(MultipleDomainDataset):
             joint_M = y_freq[:, np.newaxis] * conditional
 
             self.domains.append((joint_M, domain))
+
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        print(f'Saving cached datasets to {cache_file}')
+        torch.save(self.domains, cache_file)
 
 
     def shift(self, images, y_tilde, conditional):

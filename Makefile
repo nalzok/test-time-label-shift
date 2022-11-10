@@ -30,6 +30,9 @@ small:
 		--seed 2022 \
 		--num_workers 48
 
+tree:
+	pipenv run python3 -m tree
+
 debug:
 	pipenv run python3 \
 		-m tta.cli \
