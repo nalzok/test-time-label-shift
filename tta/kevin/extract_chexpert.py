@@ -38,9 +38,9 @@ def extract_features(root, labels, max_rows=0):
     i = 0
     for fname in labels.index:
         x = datastore[fname]
+        X[i,:] = x
         i += 1
         if i >= max_rows: break
-        X[i,:] = x
     return X
 
 def save_data(root =  "/home/kpmurphy/data/CheXpert", max_rows=20):
