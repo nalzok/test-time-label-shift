@@ -508,6 +508,9 @@ def train(
         epoch_hit = jnp.zeros(C * K, dtype=int)
         epoch_total = jnp.zeros(C * K, dtype=int)
         for X, _, Y, Z in train_loader:
+            if X.shape[0] < device_count:
+                continue
+
             remainder = X.shape[0] % device_count
             X = X[remainder:]
             Y = Y[remainder:]
@@ -543,6 +546,9 @@ def train(
             epoch_hit = jnp.zeros(C * K, dtype=int)
             epoch_total = jnp.zeros(C * K, dtype=int)
             for X, _, Y, Z in calibration_loader:
+                if X.shape[0] < device_count:
+                    continue
+
                 remainder = X.shape[0] % device_count
                 X = X[remainder:]
                 Y = Y[remainder:]
@@ -720,6 +726,9 @@ def adapt(
             generator=generator,
         )
         for X, Y_tilde, Y, Z in eval_loader:
+            if X.shape[0] < device_count:
+                continue
+
             remainder = X.shape[0] % device_count
             X = X[remainder:]
             Y_tilde = Y_tilde[remainder:]

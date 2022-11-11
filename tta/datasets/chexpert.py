@@ -82,18 +82,6 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         # Y: 0 = Positive, 1 = Negative
         # Z: 0 = Female, 1 = Male
 
-        # joint distribution of Y and Z
-        if Y_column == "PNEUMONIA" and Z_column == "GENDER":
-            confounder1 = np.array([[0.0, 0.025], [0.0, 0.975]])
-            confounder2 = np.array([[0.025, 0.0], [0.975, 0.0]])    
-        elif Y_column == "EFFUSION" and Z_column == "GENDER":
-            confounder1 = np.array([[0.5, 0.0], [0.0, 0.5]])
-            confounder2 = np.array([[0.0, 0.5], [0.5, 0.0]])
-        else:
-            raise NotImplementedError(f"Please specify confounders for (Y, Z) = ({Y_column}, {Z_column})")
-
-        domains = [None for _ in confounder_strength]
-
         #   PNEUMONIA
         # 0 = Positive, Female  - 1939
         # 1 = Positive, Male    - 2718
@@ -105,6 +93,19 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         # 1 = Positive, Male    - 44826
         # 2 = Negative, Female  - 32053
         # 3 = Negative, Male    - 46822
+
+        # joint distribution of Y and Z
+        if Y_column == "PNEUMONIA" and Z_column == "GENDER":
+            confounder1 = np.array([[0.025, 0.0], [0.0, 0.975]])
+            confounder2 = np.array([[0.0, 0.025], [0.975, 0.0]])
+        elif Y_column == "EFFUSION" and Z_column == "GENDER":
+            confounder1 = np.array([[0.5, 0.0], [0.0, 0.5]])
+            confounder2 = np.array([[0.0, 0.5], [0.5, 0.0]])
+        else:
+            raise NotImplementedError(f"Please specify confounders for (Y, Z) = ({Y_column}, {Z_column})")
+
+        domains = [None for _ in confounder_strength]
+
         labels["M"] = 2 * labels[Y_column] + labels[Z_column]
         mask = np.ones(len(labels.index), dtype=bool)
 

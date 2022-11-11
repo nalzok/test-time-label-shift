@@ -36,7 +36,7 @@ tree:
 debug:
 	pipenv run python3 \
 		-m tta.cli \
-		--config_name effusion_100_20_balanced \
+		--config_name effusion_100_20_skewed \
 		--dataset_name CheXpert \
 		--dataset_Y_column EFFUSION \
 		--dataset_Z_column GENDER \
@@ -45,11 +45,11 @@ debug:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 5 \
+		--train_domains 9 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
-		--train_epochs 100 \
+		--train_epochs 0 \
 		--train_lr 1e-3 \
 		--calibration_batch_size 64 \
 		--calibration_epochs 20 \
