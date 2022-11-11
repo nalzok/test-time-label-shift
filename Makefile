@@ -49,7 +49,7 @@ debug:
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
-		--train_epochs 0 \
+		--train_epochs 100 \
 		--train_lr 1e-3 \
 		--calibration_batch_size 64 \
 		--calibration_epochs 20 \
