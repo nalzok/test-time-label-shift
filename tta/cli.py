@@ -1,4 +1,4 @@
-from typing import Any, Sequence, List, Tuple, Set, Optional, Dict
+from typing import Any, Sequence, List, Tuple, Set, Optional, Dict, Union
 from pathlib import Path
 import sys
 import random
@@ -116,6 +116,10 @@ def cli(
     npz_root.mkdir(parents=True, exist_ok=True)
     plot_root.mkdir(parents=True, exist_ok=True)
 
+    log_path = log_root / f"{config_name}.txt"
+    sys.stdout = Tee(log_path)
+    npz_path = npz_root / f"{config_name}.npz"
+
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -146,15 +150,13 @@ def cli(
 
     if not plot_only:
         main(
-            log_root,
-            npz_root,
+            npz_path,
             dataset,
             train,
             calibration,
             eval_splits,
             train_domains_set,
             calibration_domains_set,
-            config_name,
             dataset_label_noise,
             train_joint,
             train_model,
@@ -175,7 +177,6 @@ def cli(
             num_workers,
         )
 
-    npz_path = npz_root / f"{config_name}.npz"
     plot(
         npz_path,
         train_batch_size,
@@ -307,15 +308,13 @@ def prepare_dataset(
 
 
 def main(
-    log_root: Path,
-    npz_root: Path,
+    npz_path: Path,
     dataset: MultipleDomainDataset,
     train: ConcatDataset,
     calibration: ConcatDataset,
     eval_splits: List[Tuple[torch.Tensor, Dataset]],
     train_domains_set: Set[int],
     calibration_domains_set: Set[int],
-    config_name: str,
     dataset_label_noise: float,
     train_joint: bool,
     train_model: str,
@@ -335,9 +334,6 @@ def main(
     generator: torch.Generator,
     num_workers: int,
 ) -> Dict[str, Curves]:
-    log_path = log_root / f"{config_name}.txt"
-    sys.stdout = Tee(log_path)
-
     device_count = jax.local_device_count()
     assert (
         train_batch_size % device_count == 0
@@ -433,7 +429,6 @@ def main(
         test_argmax_joint,
         test_batch_size,
     ):
-        label = f"{prior_strength=} | {symmetric_dirichlet=} | {fix_marginal=} | {argmax_joint=} | {batch_size=}"
         scheme = (prior_strength, symmetric_dirichlet, fix_marginal)
         state, (
             mean_sweep,
@@ -454,19 +449,18 @@ def main(
             scheme,
             argmax_joint,
             batch_size,
-            label,
             device_count,
             generator,
             num_workers,
         )
-        key = label, scheme, batch_size
-        mean_sweeps[key] = mean_sweep
-        l1_sweeps[key] = l1_sweep
-        auc_sweeps[key] = auc_sweep
-        auc_Z_sweeps[key] = auc_Z_sweep
-        accuracy_sweeps[key] = accuracy_sweep
-        accuracy_Z_sweeps[key] = accuracy_Z_sweep
-        norm_sweeps[key] = norm_sweep
+        k = scheme, argmax_joint, batch_size
+        mean_sweeps[k] = mean_sweep
+        l1_sweeps[k] = l1_sweep
+        auc_sweeps[k] = auc_sweep
+        auc_Z_sweeps[k] = auc_Z_sweep
+        accuracy_sweeps[k] = accuracy_sweep
+        accuracy_Z_sweeps[k] = accuracy_Z_sweep
+        norm_sweeps[k] = norm_sweep
 
     all_sweeps = {
         "mean": (mean_sweeps, "Average probability of class 1"),
@@ -479,7 +473,6 @@ def main(
     }
     pprint(all_sweeps)
 
-    npz_path = npz_root / f"{config_name}.npz"
     jnp.savez(npz_path, **all_sweeps)
 
     return all_sweeps
@@ -648,40 +641,25 @@ def train_fn(
     print("===> Adapting & Evaluating")
 
     # batch size does not matter since we are not doing adaptation
-    label = "Oracle"
-    state, oracle_sweep = adapt_fn(
-        state,
-        C,
-        K,
-        dataset_label_noise,
-        train_domains_set,
-        calibration_domains_set,
-        eval_splits,
-        None,
-        False,
-        train_batch_size,
-        label,
-        device_count,
-        generator,
-        num_workers,
-    )
-    label = "Unadapted"
-    state, unadapted_sweep = adapt_fn(
-        state,
-        C,
-        K,
-        dataset_label_noise,
-        train_domains_set,
-        calibration_domains_set,
-        eval_splits,
-        None,
-        False,
-        train_batch_size,
-        label,
-        device_count,
-        generator,
-        num_workers,
-    )
+    sweeps = []
+    for scheme in("Oracle", "Unadapted"):
+        state, sweep = adapt_fn(
+            state,
+            C,
+            K,
+            dataset_label_noise,
+            train_domains_set,
+            calibration_domains_set,
+            eval_splits,
+            scheme,
+            False,
+            train_batch_size,
+            device_count,
+            generator,
+            num_workers,
+        )
+        sweeps.append(sweep)
+    oracle_sweep, unadapted_sweep = sweeps
 
     return (
         state,
@@ -698,14 +676,14 @@ def adapt_fn(
     train_domains_set: Set[int],
     calibration_domains_set: Set[int],
     eval_splits: Sequence[Tuple[torch.Tensor, Dataset]],
-    scheme: Optional[Scheme],
+    scheme: Union[Scheme, str],
     argmax_joint: bool,
     batch_size: int,
-    label: str,
     device_count: int,
     generator: torch.Generator,
     num_workers: int,
 ) -> Tuple[TrainState, Sweeps]:
+    label = f"{scheme = }, {argmax_joint = }, {batch_size = }"
     print(f"---> {label}")
 
     mean_sweep = jnp.empty(len(eval_splits))
@@ -791,16 +769,16 @@ def adapt_fn(
                     C,
                     K,
                 )
-            elif label == "Oracle":
+            elif scheme == "Oracle":
                 prior = state.prior.unfreeze()
                 prior["target"] = replicate(joint_M.flatten())
                 state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
-            elif label == "Unadapted":
+            elif scheme == "Unadapted":
                 prior = state.prior.unfreeze()
                 prior["target"] = prior["source"]
                 state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
             else:
-                raise ValueError(f"Unknown adaptation scheme {label}")
+                raise ValueError(f"Unknown adaptation scheme {scheme}")
 
             (score, hit), (score_Z, hit_Z) = test_step(state, X, Y, Z, argmax_joint)
 
@@ -904,5 +882,5 @@ def estimate_source_prior(
 
 if __name__ == "__main__":
     initialize_cache("jit_cache")
-    # latexify(width_scale_factor=2, fig_height=2)
+    latexify(width_scale_factor=2, fig_height=2)
     cli()

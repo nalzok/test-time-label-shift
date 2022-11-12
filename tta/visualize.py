@@ -53,17 +53,6 @@ def latexify(
     plt.rc("figure", figsize=(fig_width, fig_height))
 
 
-ylabels = {
-    "mean": "Average probability of class 1",
-    "l1": "Average L1 error of class 1",
-    "auc": "Average AUC",
-    "auc_Z": "Average AUC (Z)",
-    "accuracy": "Accuracy",
-    "accuracy_Z": "Accuracy (Z)",
-    "norm": "Euclidean distance",
-}
-
-
 def plot(
     npz_path: Path,
     train_batch_size: int,
@@ -74,9 +63,10 @@ def plot(
     plot_root: Path,
     config_name: str,
 ):
+    print(f"Reading from {npz_path}")
     all_sweeps = np.load(npz_path, allow_pickle=True)
 
-    for sweep_type, sweeps in all_sweeps.items():
+    for sweep_type, (sweeps, ylabel) in all_sweeps.items():
         fig, ax = plt.subplots(figsize=(12, 6))
 
         if sweep_type == "accuracy":
@@ -90,7 +80,6 @@ def plot(
                     label="Upper bound",
                 )
 
-        sweeps = sweeps[0]
         oracle_sweep = sweeps.pop(("Oracle", None, train_batch_size))
         ax.plot(confounder_strength, oracle_sweep[:-1], linestyle="--", label="Oracle")
         unadapted_sweep = sweeps.pop(("Unadapted", None, train_batch_size))
@@ -98,7 +87,8 @@ def plot(
             confounder_strength, unadapted_sweep[:-1], linestyle="--", label="Unadapted"
         )
 
-        for (label, _, _), sweep in sweeps.items():
+        for ((prior_strength, symmetric_dirichlet, fix_marginal), argmax_joint, batch_size), sweep in sweeps.items():
+            label = f"{prior_strength = }, {symmetric_dirichlet = }, {fix_marginal = }, {argmax_joint = }, {batch_size = }"
             ax.plot(confounder_strength, sweep[:-1], label=label)
 
         for i in train_domains_set:
@@ -106,7 +96,7 @@ def plot(
 
         plt.ylim((0, 1))
         plt.xlabel("Shift parameter")
-        plt.ylabel(ylabels[sweep_type])
+        plt.ylabel(ylabel)
         plt.title(plot_title)
         plt.grid(True)
         plt.legend()

@@ -36,9 +36,9 @@ tree:
 debug:
 	pipenv run python3 \
 		-m tta.cli \
-		--config_name effusion_100_20_skewed \
+		--config_name pneumonia_100_20_skewed \
 		--dataset_name CheXpert \
-		--dataset_Y_column EFFUSION \
+		--dataset_Y_column PNEUMONIA \
 		--dataset_Z_column GENDER \
 		--dataset_use_embedding True \
 		--dataset_apply_rotation False \
@@ -62,7 +62,7 @@ debug:
 		--test_batch_size 512 \
 		--seed 2022 \
 		--num_workers 48 \
-		--plot_only True
+		--plot_only False
 
 sweep:
 	parallel \
