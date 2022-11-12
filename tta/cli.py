@@ -1,4 +1,4 @@
-from typing import Any, Sequence, List, Tuple, Set, Optional
+from typing import Any, Sequence, List, Tuple, Set, Optional, Dict
 from pathlib import Path
 import sys
 import random
@@ -12,13 +12,13 @@ import flax
 from flax.jax_utils import replicate, unreplicate
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, ConcatDataset, DataLoader
 import click
 from sklearn.metrics import roc_auc_score
 
 from tta.common import Scheme, Curves, Sweeps
 from tta.utils import Tee
-from tta.datasets import split
+from tta.datasets import MultipleDomainDataset, split
 from tta.datasets.mnist import MultipleDomainMNIST
 from tta.datasets.coco import ColoredCOCO
 from tta.datasets.waterbirds import MultipleDomainWaterbirds
@@ -40,7 +40,9 @@ from tta.visualize import latexify, plot
 @click.command()
 @click.option("--config_name", type=str, required=True)
 @click.option(
-    "--dataset_name", type=click.Choice(["MNIST", "COCO", "Waterbirds", "CheXpert"]), required=True
+    "--dataset_name",
+    type=click.Choice(["MNIST", "COCO", "Waterbirds", "CheXpert"]),
+    required=True,
 )
 @click.option("--dataset_Y_column", type=str, required=True)
 @click.option("--dataset_Z_column", type=str, required=True)
@@ -73,6 +75,7 @@ from tta.visualize import latexify, plot
 )
 @click.option("--seed", type=int, required=True)
 @click.option("--num_workers", type=int, required=True)
+@click.option("--plot_only", type=bool, required=True)
 def cli(
     config_name: str,
     dataset_name: str,
@@ -103,101 +106,15 @@ def cli(
     plot_title: str,
     seed: int,
     num_workers: int,
+    plot_only: bool,
 ) -> None:
-    main(
-        config_name,
-        dataset_name,
-        dataset_y_column,
-        dataset_z_column,
-        dataset_use_embedding,
-        dataset_apply_rotation,
-        dataset_label_noise,
-        train_joint,
-        train_model,
-        train_checkpoint_path,
-        train_domains,
-        train_fraction,
-        train_calibration_fraction,
-        train_batch_size,
-        train_epochs,
-        train_lr,
-        calibration_domains,
-        calibration_fraction,
-        calibration_batch_size,
-        calibration_epochs,
-        calibration_lr,
-        adapt_prior_strength,
-        adapt_symmetric_dirichlet,
-        adapt_fix_marginal,
-        test_argmax_joint,
-        test_batch_size,
-        plot_title,
-        seed,
-        num_workers,
-    )
-
-
-def main(
-    config_name: str,
-    dataset_name: str,
-    dataset_y_column: str,
-    dataset_z_column: str,
-    dataset_use_embedding: bool,
-    dataset_apply_rotation: bool,
-    dataset_label_noise: float,
-    train_joint: bool,
-    train_model: str,
-    train_checkpoint_path: Optional[Path],
-    train_domains: str,
-    train_fraction: float,
-    train_calibration_fraction: float,
-    train_batch_size: int,
-    train_epochs: int,
-    train_lr: float,
-    calibration_domains: Optional[str],
-    calibration_fraction: Optional[float],
-    calibration_batch_size: int,
-    calibration_epochs: int,
-    calibration_lr: float,
-    adapt_prior_strength: Sequence[float],
-    adapt_symmetric_dirichlet: Sequence[bool],
-    adapt_fix_marginal: Sequence[bool],
-    test_argmax_joint: Sequence[bool],
-    test_batch_size: Sequence[int],
-    plot_title: str,
-    seed: int,
-    num_workers: int,
-) -> Tuple[Curves, Curves, Curves, Curves, Curves]:
     log_root = Path("logs/")
-    plot_root = Path("plots/")
     npz_root = Path("npz/")
+    plot_root = Path("plots/")
 
     log_root.mkdir(parents=True, exist_ok=True)
-    plot_root.mkdir(parents=True, exist_ok=True)
     npz_root.mkdir(parents=True, exist_ok=True)
-
-    log_path = log_root / f"{config_name}.txt"
-    sys.stdout = Tee(log_path)
-
-    device_count = jax.local_device_count()
-    assert (
-        train_batch_size % device_count == 0
-    ), f"train_batch_size should be divisible by {device_count}"
-    assert (
-        calibration_batch_size % device_count == 0
-    ), f"calibration_batch_size should be divisible by {device_count}"
-    for batch_size in test_batch_size:
-        assert (
-            batch_size % device_count == 0
-        ), f"test_batch_size should be divisible by {device_count}"
-    assert (
-        (
-            calibration_domains is not None
-            and (calibration_fraction is None or calibration_fraction > 0)
-        )
-        or train_calibration_fraction > 0
-        or calibration_epochs == 0
-    ), "Calibration set may not be empty"
+    plot_root.mkdir(parents=True, exist_ok=True)
 
     random.seed(seed)
     np.random.seed(seed)
@@ -205,6 +122,93 @@ def main(
     key = jax.random.PRNGKey(seed)
     generator = torch.Generator().manual_seed(seed)
 
+    (
+        dataset,
+        train,
+        calibration,
+        eval_splits,
+        train_domains_set,
+        calibration_domains_set,
+    ) = prepare_dataset(
+        dataset_name,
+        dataset_y_column,
+        dataset_z_column,
+        dataset_use_embedding,
+        dataset_apply_rotation,
+        dataset_label_noise,
+        train_domains,
+        train_fraction,
+        train_calibration_fraction,
+        calibration_domains,
+        calibration_fraction,
+        generator,
+    )
+
+    if not plot_only:
+        main(
+            log_root,
+            npz_root,
+            dataset,
+            train,
+            calibration,
+            eval_splits,
+            train_domains_set,
+            calibration_domains_set,
+            config_name,
+            dataset_label_noise,
+            train_joint,
+            train_model,
+            train_checkpoint_path,
+            train_batch_size,
+            train_epochs,
+            train_lr,
+            calibration_batch_size,
+            calibration_epochs,
+            calibration_lr,
+            adapt_prior_strength,
+            adapt_symmetric_dirichlet,
+            adapt_fix_marginal,
+            test_argmax_joint,
+            test_batch_size,
+            key,
+            generator,
+            num_workers,
+        )
+
+    npz_path = npz_root / f"{config_name}.npz"
+    plot(
+        npz_path,
+        train_batch_size,
+        dataset.confounder_strength,
+        train_domains_set,
+        dataset_label_noise,
+        plot_title,
+        plot_root,
+        config_name,
+    )
+
+
+def prepare_dataset(
+    dataset_name: str,
+    dataset_y_column: str,
+    dataset_z_column: str,
+    dataset_use_embedding: bool,
+    dataset_apply_rotation: bool,
+    dataset_label_noise: float,
+    train_domains: str,
+    train_fraction: float,
+    train_calibration_fraction: float,
+    calibration_domains: Optional[str],
+    calibration_fraction: Optional[float],
+    generator: torch.Generator,
+) -> Tuple[
+    MultipleDomainDataset,
+    ConcatDataset,
+    ConcatDataset,
+    List[Tuple[torch.Tensor, Dataset]],
+    Set[int],
+    Set[int],
+]:
     train_domains_set = set(int(env) for env in train_domains.split(","))
     if len(train_domains_set) != 1:
         raise NotImplementedError(
@@ -220,32 +224,146 @@ def main(
     if calibration_fraction is None:
         calibration_fraction = 1.0
 
-    (
-        state,
-        C,
-        K,
-        confounder_strength,
+    if dataset_name == "MNIST":
+        root = Path("data/mnist")
+        dataset = MultipleDomainMNIST(
+            root,
+            generator,
+            train_domains_set,
+            dataset_apply_rotation,
+            dataset_label_noise,
+        )
+    elif dataset_name == "COCO":
+        assert (
+            dataset_apply_rotation is False
+        ), "Parameter dataset_apply_rotation is not supported with COCO"
+        assert (
+            dataset_label_noise == 0
+        ), "Parameter dataset_label_noise is not supported with COCO"
+
+        root = Path("data/COCO/train2017")
+        annFile = Path("data/COCO/annotations/instances_train2017.json")
+        dataset = ColoredCOCO(root, annFile, generator)
+    elif dataset_name == "Waterbirds":
+        assert (
+            dataset_apply_rotation is False
+        ), "Parameter dataset_apply_rotation is not supported with Waterbirds"
+        assert (
+            dataset_label_noise == 0
+        ), "Parameter dataset_label_noise is not supported with Waterbirds"
+
+        root = Path("data/")
+        dataset = MultipleDomainWaterbirds(root, generator)
+    elif dataset_name == "CheXpert":
+        assert (
+            dataset_apply_rotation is False
+        ), "Parameter dataset_apply_rotation is not supported with CheXpert"
+        assert (
+            dataset_label_noise == 0
+        ), "Parameter dataset_label_noise is not supported with CheXpert"
+
+        root = Path("data/CheXpert")
+        target_domain_count = 512
+        dataset = MultipleDomainCheXpert(
+            root,
+            generator,
+            dataset_y_column,
+            dataset_z_column,
+            dataset_use_embedding,
+            train_domains_set,
+            target_domain_count,
+        )
+    else:
+        raise ValueError(f"Unknown dataset {dataset_name}")
+
+    C, K = dataset.C, dataset.K
+    if C != 2 or K != 2:
+        raise NotImplementedError("Multi-label classification is not supported yet.")
+
+    train, calibration, test_splits = split(
+        dataset,
+        train_domains_set,
+        train_fraction,
+        train_calibration_fraction,
+        calibration_domains_set,
+        calibration_fraction,
+    )
+    print("train", len(train))
+    print("calibration", len(calibration))
+    (train_domain,) = train_domains_set
+    print(f"test_splits[{train_domain}][-1]", len(test_splits[train_domain][-1]))
+
+    eval_splits = test_splits.copy()
+    eval_splits.append((*test_splits[train_domain][:-1], train))
+
+    return (
+        dataset,
+        train,
+        calibration,
         eval_splits,
-        oracle_sweep,
-        unadapted_sweep,
-    ) = train(
-        dataset_name,
-        dataset_y_column,
-        dataset_z_column,
-        dataset_use_embedding,
-        dataset_apply_rotation,
+        train_domains_set,
+        calibration_domains_set,
+    )
+
+
+def main(
+    log_root: Path,
+    npz_root: Path,
+    dataset: MultipleDomainDataset,
+    train: ConcatDataset,
+    calibration: ConcatDataset,
+    eval_splits: List[Tuple[torch.Tensor, Dataset]],
+    train_domains_set: Set[int],
+    calibration_domains_set: Set[int],
+    config_name: str,
+    dataset_label_noise: float,
+    train_joint: bool,
+    train_model: str,
+    train_checkpoint_path: Optional[Path],
+    train_batch_size: int,
+    train_epochs: int,
+    train_lr: float,
+    calibration_batch_size: int,
+    calibration_epochs: int,
+    calibration_lr: float,
+    adapt_prior_strength: Sequence[float],
+    adapt_symmetric_dirichlet: Sequence[bool],
+    adapt_fix_marginal: Sequence[bool],
+    test_argmax_joint: Sequence[bool],
+    test_batch_size: Sequence[int],
+    key: Any,
+    generator: torch.Generator,
+    num_workers: int,
+) -> Dict[str, Curves]:
+    log_path = log_root / f"{config_name}.txt"
+    sys.stdout = Tee(log_path)
+
+    device_count = jax.local_device_count()
+    assert (
+        train_batch_size % device_count == 0
+    ), f"train_batch_size should be divisible by {device_count}"
+    assert (
+        calibration_batch_size % device_count == 0
+    ), f"calibration_batch_size should be divisible by {device_count}"
+    for batch_size in test_batch_size:
+        assert (
+            batch_size % device_count == 0
+        ), f"test_batch_size should be divisible by {device_count}"
+
+    (state, oracle_sweep, unadapted_sweep,) = train_fn(
+        dataset,
+        train,
+        calibration,
+        eval_splits,
         dataset_label_noise,
         train_joint,
         train_model,
         train_checkpoint_path,
         train_domains_set,
-        train_fraction,
-        train_calibration_fraction,
         train_batch_size,
         train_epochs,
         train_lr,
         calibration_domains_set,
-        calibration_fraction,
         calibration_batch_size,
         calibration_epochs,
         calibration_lr,
@@ -302,7 +420,13 @@ def main(
         ("Unadapted", None, train_batch_size): unadapted_norm_sweep,
     }
 
-    for prior_strength, symmetric_dirichlet, fix_marginal, argmax_joint, batch_size in product(
+    for (
+        prior_strength,
+        symmetric_dirichlet,
+        fix_marginal,
+        argmax_joint,
+        batch_size,
+    ) in product(
         adapt_prior_strength,
         adapt_symmetric_dirichlet,
         adapt_fix_marginal,
@@ -311,10 +435,18 @@ def main(
     ):
         label = f"{prior_strength=} | {symmetric_dirichlet=} | {fix_marginal=} | {argmax_joint=} | {batch_size=}"
         scheme = (prior_strength, symmetric_dirichlet, fix_marginal)
-        state, (mean_sweep, l1_sweep, auc_sweep, auc_Z_sweep, accuracy_sweep, accuracy_Z_sweep, norm_sweep) = adapt(
+        state, (
+            mean_sweep,
+            l1_sweep,
+            auc_sweep,
+            auc_Z_sweep,
+            accuracy_sweep,
+            accuracy_Z_sweep,
+            norm_sweep,
+        ) = adapt_fn(
             state,
-            C,
-            K,
+            dataset.C,
+            dataset.K,
             dataset_label_noise,
             train_domains_set,
             calibration_domains_set,
@@ -336,21 +468,6 @@ def main(
         accuracy_Z_sweeps[key] = accuracy_Z_sweep
         norm_sweeps[key] = norm_sweep
 
-    print("===> mean_sweeps")
-    pprint(mean_sweeps)
-    print("===> l1_sweeps")
-    pprint(l1_sweeps)
-    print("===> auc_sweeps")
-    pprint(auc_sweeps)
-    print("===> auc_Z_sweeps")
-    pprint(auc_Z_sweeps)
-    print("===> accuracy_sweeps")
-    pprint(accuracy_sweeps)
-    print("===> accuracy_Z_sweeps")
-    pprint(accuracy_Z_sweeps)
-    print("===> norm_sweeps")
-    pprint(norm_sweeps)
-
     all_sweeps = {
         "mean": (mean_sweeps, "Average probability of class 1"),
         "l1": (l1_sweeps, "Average L1 error of class 1"),
@@ -358,48 +475,30 @@ def main(
         "auc_Z": (auc_Z_sweeps, "Average AUC (Z)"),
         "accuracy": (accuracy_sweeps, "Accuracy"),
         "accuracy_Z": (accuracy_Z_sweeps, "Accuracy (Z)"),
-        "norm": (norm_sweeps, "Euclidean distance")
+        "norm": (norm_sweeps, "Euclidean distance"),
     }
+    pprint(all_sweeps)
 
     npz_path = npz_root / f"{config_name}.npz"
-    jnp.savez(npz_path, **{
-        sweep_type: sweeps
-        for sweep_type, (sweeps, _)
-        in all_sweeps.items()
-    })
+    jnp.savez(npz_path, **all_sweeps)
 
-    plot(
-        all_sweeps,
-        train_batch_size,
-        confounder_strength,
-        train_domains_set,
-        dataset_label_noise,
-        plot_title,
-        plot_root,
-        config_name,
-    )
-
-    return mean_sweeps, l1_sweeps, auc_sweeps, accuracy_sweeps, norm_sweeps
+    return all_sweeps
 
 
-def train(
-    dataset_name: str,
-    dataset_y_column: str,
-    dataset_z_column: str,
-    dataset_use_embedding: bool,
-    dataset_apply_rotation: bool,
+def train_fn(
+    dataset: MultipleDomainDataset,
+    train: ConcatDataset,
+    calibration: ConcatDataset,
+    eval_splits: List[Tuple[torch.Tensor, Dataset]],
     dataset_label_noise: float,
     train_joint: bool,
     train_model: str,
     train_checkpoint_path: Optional[Path],
     train_domains_set: Set[int],
-    train_fraction: float,
-    train_calibration_fraction: float,
     train_batch_size: int,
     train_epochs: int,
     train_lr: float,
     calibration_domains_set: Set[int],
-    calibration_fraction: float,
     calibration_batch_size: int,
     calibration_epochs: int,
     calibration_lr: float,
@@ -407,79 +506,11 @@ def train(
     key: Any,
     generator: torch.Generator,
     num_workers: int,
-) -> Tuple[
-    TrainState,
-    int,
-    int,
-    np.ndarray,
-    List[Tuple[torch.Tensor, Dataset]],
-    Sweeps,
-    Sweeps,
-]:
-    if dataset_name == "MNIST":
-        root = Path("data/mnist")
-        dataset = MultipleDomainMNIST(
-            root,
-            generator,
-            train_domains_set,
-            dataset_apply_rotation,
-            dataset_label_noise,
-        )
-    elif dataset_name == "COCO":
-        assert (
-            dataset_apply_rotation is False
-        ), "Parameter dataset_apply_rotation is not supported with COCO"
-        assert (
-            dataset_label_noise == 0
-        ), "Parameter dataset_label_noise is not supported with COCO"
-
-        root = Path("data/COCO/train2017")
-        annFile = Path("data/COCO/annotations/instances_train2017.json")
-        dataset = ColoredCOCO(root, annFile, generator)
-    elif dataset_name == "Waterbirds":
-        assert (
-            dataset_apply_rotation is False
-        ), "Parameter dataset_apply_rotation is not supported with Waterbirds"
-        assert (
-            dataset_label_noise == 0
-        ), "Parameter dataset_label_noise is not supported with Waterbirds"
-
-        root = Path("data/")
-        dataset = MultipleDomainWaterbirds(root, generator)
-    elif dataset_name == "CheXpert":
-        assert (
-            dataset_apply_rotation is False
-        ), "Parameter dataset_apply_rotation is not supported with CheXpert"
-        assert (
-            dataset_label_noise == 0
-        ), "Parameter dataset_label_noise is not supported with CheXpert"
-
-        root = Path("data/CheXpert")
-        target_domain_count = 512
-        dataset = MultipleDomainCheXpert(root, generator, dataset_y_column, dataset_z_column, dataset_use_embedding, train_domains_set, target_domain_count)
-    else:
-        raise ValueError(f"Unknown dataset {dataset_name}")
+) -> Tuple[TrainState, Sweeps, Sweeps,]:
+    if len(calibration) == 0 and calibration_epochs > 0:
+        raise ValueError("Calibration set may not be empty")
 
     C, K = dataset.C, dataset.K
-    if C != 2:
-        raise NotImplementedError("Multi-label classification is not supported yet.")
-
-    train, calibration, test_splits = split(
-        dataset,
-        train_domains_set,
-        train_fraction,
-        train_calibration_fraction,
-        calibration_domains_set,
-        calibration_fraction,
-    )
-    print("train", len(train))
-    print("calibration", len(calibration))
-    train_domain, = train_domains_set
-    print(f"test_splits[{train_domain}][-1]", len(test_splits[train_domain][-1]))
-
-    eval_splits = test_splits.copy()
-    eval_splits.append((*test_splits[train_domain][:-1], train))
-
     key_init, key = jax.random.split(key)
     specimen = jnp.empty(dataset.input_shape)
     state = create_train_state(
@@ -527,7 +558,9 @@ def train(
             epoch_total += unreplicate(total)
 
         with jnp.printoptions(precision=3):
-            print(f"Train epoch {epoch + 1}, loss: {epoch_loss}, hit: {epoch_hit}, total: {epoch_total}")
+            print(
+                f"Train epoch {epoch + 1}, loss: {epoch_loss}, hit: {epoch_hit}, total: {epoch_total}"
+            )
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
@@ -559,17 +592,21 @@ def train(
                 Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
                 M = Y * K + Z
 
-                state, (loss, hit, total) = calibration_step(state, X, M, K, train_joint, calibration_lr)
+                state, (loss, hit, total) = calibration_step(
+                    state, X, M, K, train_joint, calibration_lr
+                )
                 epoch_loss += unreplicate(loss)
                 epoch_hit += unreplicate(hit)
                 epoch_total += unreplicate(total)
 
             with jnp.printoptions(precision=3):
-                print(f"Calibration epoch {epoch + 1}, loss: {epoch_loss}, hit: {epoch_hit}, total: {epoch_total}")
+                print(
+                    f"Calibration epoch {epoch + 1}, loss: {epoch_loss}, hit: {epoch_hit}, total: {epoch_total}"
+                )
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
-    
+
     print("---> Temperature =", unreplicate(state.params["T"]))
     print("---> Bias =", unreplicate(state.params["b"]))
 
@@ -583,7 +620,7 @@ def train(
         K,
         device_count,
         state,
-        "induce"
+        "induce",
     )
     source_prior_empirical = estimate_source_prior(
         train,
@@ -594,12 +631,15 @@ def train(
         K,
         device_count,
         state,
-        "count"
+        "count",
     )
-    
+
     print("---> Induced source label prior =", source_prior_induced)
     print("---> Empirical source label prior =", source_prior_empirical)
-    print("---> Total variation distance =", jnp.sum(jnp.abs(source_prior_induced - source_prior_empirical))/2)
+    print(
+        "---> Total variation distance =",
+        jnp.sum(jnp.abs(source_prior_induced - source_prior_empirical)) / 2,
+    )
 
     prior = state.prior.unfreeze()
     prior["source"] = replicate(source_prior_induced)
@@ -609,7 +649,7 @@ def train(
 
     # batch size does not matter since we are not doing adaptation
     label = "Oracle"
-    state, oracle_sweep = adapt(
+    state, oracle_sweep = adapt_fn(
         state,
         C,
         K,
@@ -626,7 +666,7 @@ def train(
         num_workers,
     )
     label = "Unadapted"
-    state, unadapted_sweep = adapt(
+    state, unadapted_sweep = adapt_fn(
         state,
         C,
         K,
@@ -645,16 +685,12 @@ def train(
 
     return (
         state,
-        C,
-        K,
-        dataset.confounder_strength,
-        eval_splits,
         oracle_sweep,
         unadapted_sweep,
     )
 
 
-def adapt(
+def adapt_fn(
     state: TrainState,
     C: int,
     K: int,
@@ -741,8 +777,8 @@ def adapt(
             Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
             Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
 
-            epoch_Y = epoch_Y.at[offset:offset+N].set(Y.flatten())
-            epoch_Z = epoch_Z.at[offset:offset+N].set(Z.flatten())
+            epoch_Y = epoch_Y.at[offset : offset + N].set(Y.flatten())
+            epoch_Z = epoch_Z.at[offset : offset + N].set(Z.flatten())
 
             if isinstance(scheme, tuple):
                 prior_strength, symmetric_dirichlet, fix_marginal = scheme
@@ -770,8 +806,8 @@ def adapt(
 
             mean += jnp.sum(score)
             l1 += jnp.sum(jnp.abs(score.flatten() - prob[Y_tilde, Z.flatten()]))
-            epoch_score = epoch_score.at[offset:offset+N].set(score.flatten())
-            epoch_score_Z = epoch_score.at[offset:offset+N].set(score_Z.flatten())
+            epoch_score = epoch_score.at[offset : offset + N].set(score.flatten())
+            epoch_score_Z = epoch_score.at[offset : offset + N].set(score_Z.flatten())
             hits += unreplicate(hit)
             hits_Z += unreplicate(hit_Z)
             prior = unreplicate(state.prior["target"]).reshape((C, K))
@@ -809,7 +845,15 @@ def adapt(
         f"Norm {jnp.nanmean(norm_sweep[:-1])}"
     )
 
-    return state, (mean_sweep, l1_sweep, auc_sweep, auc_Z_sweep, accuracy_sweep, accuracy_Z_sweep, norm_sweep)
+    return state, (
+        mean_sweep,
+        l1_sweep,
+        auc_sweep,
+        auc_Z_sweep,
+        accuracy_sweep,
+        accuracy_Z_sweep,
+        norm_sweep,
+    )
 
 
 def estimate_source_prior(

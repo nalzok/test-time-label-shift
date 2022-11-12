@@ -14,8 +14,8 @@ def load_data(column):
 
     attributes = data_matrix["attributes"]
     columns = data_matrix["columns"]
-    (Y_index,) = np.flatnonzero(columns == column)
-    Y = attributes[:, Y_index]
+    (index_Y,) = np.flatnonzero(columns == column)
+    Y = attributes[:, index_Y]
 
     mask = (Y == 1) | (Y == 3)
     X = X[mask]

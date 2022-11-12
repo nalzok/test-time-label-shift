@@ -1,10 +1,8 @@
-from typing import Set, Union, Dict, Tuple
+from typing import Set, Union
 
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
-
-from tta.common import Curves
 
 
 DEFAULT_WIDTH = 6.0
@@ -55,8 +53,19 @@ def latexify(
     plt.rc("figure", figsize=(fig_width, fig_height))
 
 
+ylabels = {
+    "mean": "Average probability of class 1",
+    "l1": "Average L1 error of class 1",
+    "auc": "Average AUC",
+    "auc_Z": "Average AUC (Z)",
+    "accuracy": "Accuracy",
+    "accuracy_Z": "Accuracy (Z)",
+    "norm": "Euclidean distance",
+}
+
+
 def plot(
-    all_sweeps: Dict[str, Tuple[Curves, str]],
+    npz_path: Path,
     train_batch_size: int,
     confounder_strength: np.ndarray,
     train_domains_set: Set[int],
@@ -65,7 +74,9 @@ def plot(
     plot_root: Path,
     config_name: str,
 ):
-    for sweep_type, (sweeps, ylabel) in all_sweeps.items():
+    all_sweeps = np.load(npz_path, allow_pickle=True)
+
+    for sweep_type, sweeps in all_sweeps.items():
         fig, ax = plt.subplots(figsize=(12, 6))
 
         if sweep_type == "accuracy":
@@ -79,6 +90,7 @@ def plot(
                     label="Upper bound",
                 )
 
+        sweeps = sweeps[0]
         oracle_sweep = sweeps.pop(("Oracle", None, train_batch_size))
         ax.plot(confounder_strength, oracle_sweep[:-1], linestyle="--", label="Oracle")
         unadapted_sweep = sweeps.pop(("Unadapted", None, train_batch_size))
@@ -94,7 +106,7 @@ def plot(
 
         plt.ylim((0, 1))
         plt.xlabel("Shift parameter")
-        plt.ylabel(ylabel)
+        plt.ylabel(ylabels[sweep_type])
         plt.title(plot_title)
         plt.grid(True)
         plt.legend()

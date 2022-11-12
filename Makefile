@@ -61,7 +61,8 @@ debug:
 		--test_argmax_joint True \
 		--test_batch_size 512 \
 		--seed 2022 \
-		--num_workers 48
+		--num_workers 48 \
+		--plot_only True
 
 sweep:
 	parallel \
