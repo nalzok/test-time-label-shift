@@ -120,13 +120,7 @@ def baseline(data_matrix, column):
         train_auc = roc_auc_score(Y.reshape(-1), train_score.reshape(-1))
 
     print(
-        "Train Performance: ",
-        "Loss:",
-        train_loss,
-        "Accuracy:",
-        train_accuracy,
-        "AUC:",
-        train_auc,
+        f"[Train] Loss: {train_loss:.4f}, Accuracy: {train_accuracy:.4f} ({jnp.mean(Y):.4f}), AUC: {train_auc:.4f}"
     )
 
     test_loss, test_score = test_step(params, model, X_test, Y_test)
@@ -134,13 +128,7 @@ def baseline(data_matrix, column):
     test_accuracy = jnp.mean((test_score > 0.5) == Y_test)
     test_auc = roc_auc_score(Y_test.reshape(-1), test_score.reshape(-1))
     print(
-        "Test Performance: ",
-        "Loss:",
-        test_loss,
-        "Accuracy:",
-        test_accuracy,
-        "AUC:",
-        test_auc,
+        f"[Test] Loss: {test_loss:.4f}, Accuracy: {test_accuracy:.4f} ({jnp.mean(Y_test):.4f}), AUC: {test_auc:.4f}"
     )
 
 
