@@ -14,6 +14,7 @@ torchvision = "*"
 click = "*"
 matplotlib = "*"
 tensorflow-cpu = "*"
+statsmodels = "*"
 
 [dev-packages]
 black = {extras = ["jupyter"]}

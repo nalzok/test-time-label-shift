@@ -29,10 +29,10 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             )
 
         m = sha256()
-        m.update(str(use_embedding).encode())
-        m.update(str(train_domains).encode())
         m.update(Y_column.encode())
         m.update(Z_column.encode())
+        m.update(str(use_embedding).encode())
+        m.update(str(train_domains).encode())
         m.update(str(target_domain_count).encode())
         cache_key = m.hexdigest()
         cache_file = root / 'cached' / f'{cache_key}.pt'
@@ -67,9 +67,13 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         # 1 = positive      - 76726
         # 2 = uncertain     - 25371
         # 3 = negative      - 78875
-        labels = labels.loc[labels["PNEUMONIA"].isin({1, 3})]
-        labels = labels.loc[labels["EFFUSION"].isin({1, 3})]
-        labels = labels.loc[labels["GENDER"] != "Unknown"]
+        relevant_columns = {Y_column, Z_column}
+        if "PNEUMONIA" in relevant_columns:
+            labels = labels.loc[labels["PNEUMONIA"].isin({1, 3})]
+        if "EFFUSION" in relevant_columns:
+            labels = labels.loc[labels["EFFUSION"].isin({1, 3})]
+        if "GENDER" in relevant_columns:
+            labels = labels.loc[labels["GENDER"] != "Unknown"]
 
         self.Y_column = Y_column
         self.Z_column = Z_column
@@ -79,38 +83,29 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
                 raise NotImplementedError(f"Column {column} has {len(uniques)} != 2 levels.")
             labels[column] = code
 
-        # Y: 0 = Positive, 1 = Negative
-        # Z: 0 = Female, 1 = Male
-
-        #   PNEUMONIA
-        # 0 = Positive, Female  - 1939
-        # 1 = Positive, Male    - 2718
-        # 2 = Negative, Female  - 69209
-        # 3 = Negative, Male    - 98645
-        #
-        #   EFFUSION
-        # 0 = Positive, Female  - 31900
-        # 1 = Positive, Male    - 44826
-        # 2 = Negative, Female  - 32053
-        # 3 = Negative, Male    - 46822
+        # PNEUMONIA/EFFUSION:   0 = Positive, 1 = Negative
+        # GENDER:               0 = Female, 1 = Male
+        labels["M"] = 2 * labels[Y_column] + labels[Z_column]
+        print(Y_column, Z_column, labels["M"].value_counts().sort_index().values)
+        mask = np.ones(len(labels.index), dtype=bool)
 
         # joint distribution of Y and Z
-        if Y_column == "PNEUMONIA" and Z_column == "GENDER":
-            confounder1 = np.array([[0.025, 0.0], [0.0, 0.975]])
-            confounder2 = np.array([[0.0, 0.025], [0.975, 0.0]])
+        if Y_column == "PNEUMONIA" and Z_column == "EFFUSION":
+            # PNEUMONIA EFFUSION [ 1395  2702 69011 66799]
+            confounder2 = np.array([[0.025, 0.0], [0.0, 0.975]])
+            confounder1 = np.array([[0.0, 0.025], [0.975, 0.0]])
+        elif Y_column == "PNEUMONIA" and Z_column == "GENDER":
+            # PNEUMONIA GENDER [ 1939  2718 69209 98645]
+            confounder2 = np.array([[0.025, 0.0], [0.0, 0.975]])
+            confounder1 = np.array([[0.0, 0.025], [0.975, 0.0]])
         elif Y_column == "EFFUSION" and Z_column == "GENDER":
-            confounder1 = np.array([[0.5, 0.0], [0.0, 0.5]])
-            confounder2 = np.array([[0.0, 0.5], [0.5, 0.0]])
-        elif Y_column == "GENDER" and Z_column == "EFFUSION":
-            confounder1 = np.array([[0.5, 0.0], [0.0, 0.5]])
-            confounder2 = np.array([[0.0, 0.5], [0.5, 0.0]])
+            # EFFUSION GENDER [31900 44826 32053 46822]
+            confounder2 = np.array([[0.5, 0.0], [0.0, 0.5]])
+            confounder1 = np.array([[0.0, 0.5], [0.5, 0.0]])
         else:
             raise NotImplementedError(f"Please specify confounders for (Y, Z) = ({Y_column}, {Z_column})")
 
         domains = [None for _ in confounder_strength]
-
-        labels["M"] = 2 * labels[Y_column] + labels[Z_column]
-        mask = np.ones(len(labels.index), dtype=bool)
 
         # Sample source domains
         for i, strength in enumerate(self.confounder_strength):
