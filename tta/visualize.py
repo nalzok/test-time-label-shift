@@ -7,7 +7,13 @@ import matplotlib.pyplot as plt
 
 DEFAULT_WIDTH = 6.0
 DEFAULT_HEIGHT = 1.5
-SIZE_SMALL = 9  # Caption size in the pml book
+
+# Font sizes
+SIZE_SMALL = 10
+SIZE_MEDIUM = 12
+SIZE_LARGE = 16
+
+SPINE_COLOR = 'gray'
 
 
 def latexify(
@@ -15,14 +21,12 @@ def latexify(
     height_scale_factor=1,
     fig_width=None,
     fig_height=None,
-    font_size=SIZE_SMALL,
 ):
     f"""
     width_scale_factor: float, DEFAULT_WIDTH will be divided by this number, DEFAULT_WIDTH is page width: {DEFAULT_WIDTH} inches.
     height_scale_factor: float, DEFAULT_HEIGHT will be divided by this number, DEFAULT_HEIGHT is {DEFAULT_HEIGHT} inches.
     fig_width: float, width of the figure in inches (if this is specified, width_scale_factor is ignored)
     fig_height: float, height of the figure in inches (if this is specified, height_scale_factor is ignored)
-    font_size: float, font size
     """
     if fig_width is None:
         fig_width = DEFAULT_WIDTH / width_scale_factor
@@ -34,23 +38,37 @@ def latexify(
     # https://jdhao.github.io/2018/01/18/mpl-plotting-notes-201801/
     plt.rcParams["pdf.fonttype"] = 42
 
-    # Font sizes
-    # SIZE_MEDIUM = 14
-    # SIZE_LARGE = 24
     # https://stackoverflow.com/a/39566040
-    plt.rc("font", size=font_size)  # controls default text sizes
-    plt.rc("axes", titlesize=font_size)  # fontsize of the axes title
-    plt.rc("axes", labelsize=font_size)  # fontsize of the x and y labels
-    plt.rc("xtick", labelsize=font_size)  # fontsize of the tick labels
-    plt.rc("ytick", labelsize=font_size)  # fontsize of the tick labels
-    plt.rc("legend", fontsize=font_size)  # legend fontsize
-    plt.rc("figure", titlesize=font_size)  # fontsize of the figure title
+    plt.rc("font", size=SIZE_MEDIUM)  # controls default text sizes
+    plt.rc("axes", titlesize=SIZE_LARGE)  # fontsize of the axes title
+    plt.rc("axes", labelsize=SIZE_LARGE)  # fontsize of the x and y labels
+    plt.rc("xtick", labelsize=SIZE_LARGE)  # fontsize of the tick labels
+    plt.rc("ytick", labelsize=SIZE_LARGE)  # fontsize of the tick labels
+    plt.rc("legend", fontsize=SIZE_LARGE)  # legend fontsize
+    plt.rc("figure", titlesize=SIZE_LARGE)  # fontsize of the figure title
 
     # latexify: https://nipunbatra.github.io/blog/posts/2014-06-02-latexify.html
     plt.rcParams["backend"] = "ps"
     plt.rc("text", usetex=True)
     plt.rc("font", family="serif")
     plt.rc("figure", figsize=(fig_width, fig_height))
+
+
+def format_axes(ax):
+    for spine in ['top', 'right']:
+        ax.spines[spine].set_visible(False)
+
+    for spine in ['left', 'bottom']:
+        ax.spines[spine].set_color(SPINE_COLOR)
+        ax.spines[spine].set_linewidth(0.5)
+
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('left')
+
+    for axis in [ax.xaxis, ax.yaxis]:
+        axis.set_tick_params(direction='out', color=SPINE_COLOR)
+
+    return ax
 
 
 def plot(
@@ -81,15 +99,15 @@ def plot(
                 )
 
         oracle_sweep = sweeps.pop(("Oracle", None, train_batch_size))
-        ax.plot(confounder_strength, oracle_sweep[:-1], linestyle="--", label="Oracle")
+        ax.plot(confounder_strength, oracle_sweep[:-1], linestyle="--", linewidth=2, label="Oracle")
         unadapted_sweep = sweeps.pop(("Unadapted", None, train_batch_size))
         ax.plot(
-            confounder_strength, unadapted_sweep[:-1], linestyle="--", label="Unadapted"
+            confounder_strength, unadapted_sweep[:-1], linestyle="--", linewidth=2, label="Unadapted"
         )
 
         for ((prior_strength, symmetric_dirichlet, fix_marginal), argmax_joint, batch_size), sweep in sweeps.items():
             label = f"{prior_strength = }, {symmetric_dirichlet = }, {fix_marginal = }, {argmax_joint = }, {batch_size = }"
-            ax.plot(confounder_strength, sweep[:-1], label=label)
+            ax.plot(confounder_strength, sweep[:-1], linewidth=2, label=label)
 
         for i in train_domains_set:
             ax.axvline(confounder_strength[i], linestyle=":")
@@ -99,10 +117,11 @@ def plot(
         plt.ylabel(ylabel)
         plt.title(plot_title)
         plt.grid(True)
-        plt.legend()
+        plt.legend(loc="lower center", bbox_to_anchor=(0.5, -0.5), ncol=1, frameon=False)
 
+        format_axes(ax)
         for suffix in ("png", "pdf"):
-            plt.savefig(plot_root / f"{config_name}_{sweep_type}.{suffix}", dpi=300)
+            plt.savefig(plot_root / f"{config_name}_{sweep_type}.{suffix}", bbox_inches="tight", dpi=300)
 
         plt.close(fig)
 

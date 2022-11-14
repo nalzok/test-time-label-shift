@@ -101,6 +101,9 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         elif Y_column == "EFFUSION" and Z_column == "GENDER":
             confounder1 = np.array([[0.5, 0.0], [0.0, 0.5]])
             confounder2 = np.array([[0.0, 0.5], [0.5, 0.0]])
+        elif Y_column == "GENDER" and Z_column == "EFFUSION":
+            confounder1 = np.array([[0.5, 0.0], [0.0, 0.5]])
+            confounder2 = np.array([[0.0, 0.5], [0.5, 0.0]])
         else:
             raise NotImplementedError(f"Please specify confounders for (Y, Z) = ({Y_column}, {Z_column})")
 

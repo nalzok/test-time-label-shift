@@ -785,7 +785,7 @@ def adapt_fn(
             mean += jnp.sum(score)
             l1 += jnp.sum(jnp.abs(score.flatten() - prob[Y_tilde, Z.flatten()]))
             epoch_score = epoch_score.at[offset : offset + N].set(score.flatten())
-            epoch_score_Z = epoch_score.at[offset : offset + N].set(score_Z.flatten())
+            epoch_score_Z = epoch_score_Z.at[offset : offset + N].set(score_Z.flatten())
             hits += unreplicate(hit)
             hits_Z += unreplicate(hit_Z)
             prior = unreplicate(state.prior["target"]).reshape((C, K))
