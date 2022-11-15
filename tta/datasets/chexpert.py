@@ -2,6 +2,7 @@ from hashlib import sha256
 import re
 
 import numpy as np
+from scipy.special import softmax
 import pandas as pd
 import torch
 from torch.utils.data import TensorDataset
@@ -92,16 +93,20 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         # joint distribution of Y and Z
         if Y_column == "PNEUMONIA" and Z_column == "EFFUSION":
             # PNEUMONIA EFFUSION [ 1395  2702 69011 66799]
-            confounder2 = np.array([[0.025, 0.0], [0.0, 0.975]])
-            confounder1 = np.array([[0.0, 0.025], [0.975, 0.0]])
+            confounder1 = np.array([[0.025, 0.0], [0.0, 0.975]])
+            confounder2 = np.array([[0.0, 0.025], [0.975, 0.0]])
         elif Y_column == "PNEUMONIA" and Z_column == "GENDER":
             # PNEUMONIA GENDER [ 1939  2718 69209 98645]
-            confounder2 = np.array([[0.025, 0.0], [0.0, 0.975]])
-            confounder1 = np.array([[0.0, 0.025], [0.975, 0.0]])
+            confounder1 = np.array([[0.025, 0.0], [0.0, 0.975]])
+            confounder2 = np.array([[0.0, 0.025], [0.975, 0.0]])
         elif Y_column == "EFFUSION" and Z_column == "GENDER":
             # EFFUSION GENDER [31900 44826 32053 46822]
-            confounder2 = np.array([[0.5, 0.0], [0.0, 0.5]])
-            confounder1 = np.array([[0.0, 0.5], [0.5, 0.0]])
+            confounder1 = np.array([[0.5, 0.0], [0.0, 0.5]])
+            confounder2 = np.array([[0.0, 0.5], [0.5, 0.0]])
+        elif Y_column == "GENDER" and Z_column == "EFFUSION":
+            # GENDER EFFUSION [31900 32053 44826 46822]
+            confounder1 = np.array([[0.5, 0.0], [0.0, 0.5]])
+            confounder2 = np.array([[0.0, 0.5], [0.5, 0.0]])
         else:
             raise NotImplementedError(f"Please specify confounders for (Y, Z) = ({Y_column}, {Z_column})")
 
@@ -121,9 +126,14 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             joint_M = count / torch.sum(count)
 
             print(f"histogram(M) = {count.flatten()}")
-            domain, in_sample = self.sample(datastore, labels, mask, count)
-            mask &= ~labels.index.isin(in_sample)
+            reservation = np.ceil(target_domain_count * np.maximum(confounder1, confounder2).flatten())
+            domain, in_sample_patients = self.sample(datastore, labels, mask, count, reservation)
+            mask &= ~labels["patient_id"].isin(in_sample_patients)
             domains[i] = (joint_M, domain)
+
+        remainder = np.sum(mask)
+        if remainder < target_domain_count:
+            raise ValueError(f"Not enough data for target domains: {remainder} < {target_domain_count}")
 
         # Sample target domains
         for i, strength in enumerate(self.confounder_strength):
@@ -151,13 +161,13 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
                 count[s3] += 1
 
             total_count = torch.sum(count)
-            assert total_count == target_domain_count, f"Incorrect total count {total_count} != {target_domain_count}"
+            assert total_count == target_domain_count, f"Incorrect total count: {total_count} != {target_domain_count}"
 
             count = count.reshape((2, 2))
             joint_M = count / torch.sum(count)
 
             print(f"histogram(M) = {count.flatten()}")
-            domain, _ = self.sample(datastore, labels, mask, count)
+            domain, _ = self.sample(datastore, labels, mask, count, None)
             domains[i] = (joint_M, domain)
 
         self.domains = domains
@@ -167,17 +177,29 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         torch.save(self.domains, cache_file)
 
 
-    def sample(self, datastore, labels, mask, count):
-        in_sample = set()
+    def sample(self, datastore, labels, mask, count, reservation):
+        random_state = 0
+        while True:
+            in_sample = set()
+            for Y in range(2):
+                for Z in range(2):
+                    masked = labels.loc[mask & (labels["M"] == 2 * Y + Z)]
+                    image_per_patient = masked.groupby("patient_id").size()
+                    weights = softmax(image_per_patient.loc[masked["patient_id"]].values)
+                    indices = masked.sample(int(count[Y, Z]), weights=weights, random_state=random_state)
+                    in_sample.update(indices.index)
 
-        for Y in range(2):
-            for Z in range(2):
-                masked = labels.loc[mask & (labels["M"] == 2 * Y + Z)]
-                indices = masked.sample(int(count[Y, Z]), random_state=42)
-                in_sample.update(indices.index)
+            in_sample_patients = { fname.split("/")[2] for fname in in_sample }
+            remainder = np.bincount(labels["M"], weights=mask & ~labels["patient_id"].isin(in_sample_patients))
+            if reservation is None or np.all(remainder >= reservation):
+                print(f"  remainder = {remainder} >= {reservation} = target_domain_count")
+                break
+
+            random_state += 1
+            print(f"  remainder = {remainder} < {reservation} = target_domain_count")
 
         N = int(torch.sum(count))
-        assert len(in_sample) == N, f"Incorrect number of elements {len(in_sample)} != {N}"
+        assert len(in_sample) == N, f"Incorrect number of elements: {len(in_sample)} != {N}"
 
         x = torch.empty((N, *self.input_shape[1:]))
         y_tilde = torch.empty(N, dtype=torch.long)
@@ -191,7 +213,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             y[perm[i]] = y_tilde[perm[i]] = row[self.Y_column]
             z_flattened[perm[i]] = row[self.Z_column]
 
-        return TensorDataset(x, y_tilde, y, z_flattened), in_sample
+        return TensorDataset(x, y_tilde, y, z_flattened), in_sample_patients
 
 
 class CheXpertImages:

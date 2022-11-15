@@ -208,6 +208,64 @@ debug:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_only False
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name gender_effusion_100_20_balanced \
+		--dataset_name CheXpert \
+		--dataset_Y_column GENDER \
+		--dataset_Z_column EFFUSION \
+		--dataset_use_embedding True \
+		--dataset_apply_rotation False \
+		--dataset_label_noise 0 \
+		--train_joint True \
+		--train_model Linear \
+		--train_domains 5 \
+		--train_fraction 0.9 \
+		--train_calibration_fraction 0.1 \
+		--train_batch_size 64 \
+		--train_epochs 100 \
+		--train_lr 1e-3 \
+		--calibration_batch_size 64 \
+		--calibration_epochs 20 \
+		--calibration_lr 1e-3 \
+		--adapt_prior_strength 1 \
+		--adapt_symmetric_dirichlet False \
+		--adapt_fix_marginal False \
+		--test_argmax_joint False \
+		--test_argmax_joint True \
+		--test_batch_size 512 \
+		--seed 2022 \
+		--num_workers 48 \
+		--plot_only False
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name gender_effusion_100_20_skewed \
+		--dataset_name CheXpert \
+		--dataset_Y_column GENDER \
+		--dataset_Z_column EFFUSION \
+		--dataset_use_embedding True \
+		--dataset_apply_rotation False \
+		--dataset_label_noise 0 \
+		--train_joint True \
+		--train_model Linear \
+		--train_domains 9 \
+		--train_fraction 0.9 \
+		--train_calibration_fraction 0.1 \
+		--train_batch_size 64 \
+		--train_epochs 100 \
+		--train_lr 1e-3 \
+		--calibration_batch_size 64 \
+		--calibration_epochs 20 \
+		--calibration_lr 1e-3 \
+		--adapt_prior_strength 1 \
+		--adapt_symmetric_dirichlet False \
+		--adapt_fix_marginal False \
+		--test_argmax_joint False \
+		--test_argmax_joint True \
+		--test_batch_size 512 \
+		--seed 2022 \
+		--num_workers 48 \
+		--plot_only False
 
 sweep:
 	parallel \
