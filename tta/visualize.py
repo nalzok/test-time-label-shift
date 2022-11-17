@@ -98,15 +98,24 @@ def plot(
                     label="Upper bound",
                 )
 
-        oracle_sweep = sweeps.pop(("Oracle", None, train_batch_size))
-        ax.plot(confounder_strength, oracle_sweep[:-1], linestyle="--", linewidth=2, label="Oracle")
-        unadapted_sweep = sweeps.pop(("Unadapted", None, train_batch_size))
-        ax.plot(
-            confounder_strength, unadapted_sweep[:-1], linestyle="--", linewidth=2, label="Unadapted"
-        )
+        argmax_joint = False
+        batch_size = train_batch_size
+        for baseline in ("Oracle", "Null"):
+            adaptation = (baseline,)
+            sweep = sweeps.pop((adaptation, argmax_joint, batch_size))
+            label = f"[{baseline}]"
+            ax.plot(confounder_strength, sweep[:-1], linestyle="--", linewidth=2, label=label)
 
-        for ((prior_strength, symmetric_dirichlet, fix_marginal), argmax_joint, batch_size), sweep in sweeps.items():
-            label = f"{prior_strength = }, {symmetric_dirichlet = }, {fix_marginal = }, {argmax_joint = }, {batch_size = }"
+        for (adaptation, argmax_joint, batch_size), sweep in sweeps.items():
+            if adaptation[0] == "GMTL":
+                _, alpha = adaptation
+                label = f"[GMTL] {alpha = }, {argmax_joint = }, {batch_size = }"
+            elif adaptation[0] == "EM":
+                _, prior_strength, symmetric_dirichlet, fix_marginal = adaptation
+                label = f"[EM] {prior_strength = }, {symmetric_dirichlet = }, {fix_marginal = }, {argmax_joint = }, {batch_size = }"
+            else:
+                raise ValueError(f"Unknown adaptation scheme {adaptation}")
+
             ax.plot(confounder_strength, sweep[:-1], linewidth=2, label=label)
 
         for i in train_domains_set:

@@ -1,4 +1,4 @@
-from typing import Any, Sequence, List, Tuple, Set, Optional, Dict, Union
+from typing import Any, Sequence, List, Tuple, Set, Optional, Dict
 from pathlib import Path
 import sys
 import random
@@ -16,7 +16,7 @@ from torch.utils.data import Dataset, ConcatDataset, DataLoader
 import click
 from sklearn.metrics import roc_auc_score
 
-from tta.common import Scheme, Curves, Sweeps
+from tta.common import Adaptation, Curves, Sweeps
 from tta.utils import Tee
 from tta.datasets import MultipleDomainDataset, split
 from tta.datasets.mnist import MultipleDomainMNIST
@@ -65,6 +65,7 @@ from tta.visualize import latexify, plot
 @click.option("--calibration_batch_size", type=int, required=True)
 @click.option("--calibration_epochs", type=int, required=True)
 @click.option("--calibration_lr", type=float, required=True)
+@click.option("--adapt_gmtl_alpha", type=float, required=False, multiple=True)
 @click.option("--adapt_prior_strength", type=float, required=False, multiple=True)
 @click.option("--adapt_symmetric_dirichlet", type=bool, required=False, multiple=True)
 @click.option("--adapt_fix_marginal", type=bool, required=False, multiple=True)
@@ -98,6 +99,7 @@ def cli(
     calibration_batch_size: int,
     calibration_epochs: int,
     calibration_lr: float,
+    adapt_gmtl_alpha: Sequence[float],
     adapt_prior_strength: Sequence[float],
     adapt_symmetric_dirichlet: Sequence[bool],
     adapt_fix_marginal: Sequence[bool],
@@ -167,6 +169,7 @@ def cli(
             calibration_batch_size,
             calibration_epochs,
             calibration_lr,
+            adapt_gmtl_alpha,
             adapt_prior_strength,
             adapt_symmetric_dirichlet,
             adapt_fix_marginal,
@@ -325,6 +328,7 @@ def main(
     calibration_batch_size: int,
     calibration_epochs: int,
     calibration_lr: float,
+    adapt_gmtl_alpha: Sequence[float],
     adapt_prior_strength: Sequence[float],
     adapt_symmetric_dirichlet: Sequence[bool],
     adapt_fix_marginal: Sequence[bool],
@@ -346,7 +350,7 @@ def main(
             batch_size % device_count == 0
         ), f"test_batch_size should be divisible by {device_count}"
 
-    (state, oracle_sweep, unadapted_sweep,) = train_fn(
+    (state, mean_sweeps, l1_sweeps, auc_sweeps, auc_Z_sweeps, accuracy_sweeps, accuracy_Z_sweeps, norm_sweeps) = train_fn(
         dataset,
         train,
         calibration,
@@ -363,58 +367,12 @@ def main(
         calibration_batch_size,
         calibration_epochs,
         calibration_lr,
+        adapt_gmtl_alpha,
         device_count,
         key,
         generator,
         num_workers,
     )
-
-    (
-        oracle_mean_sweep,
-        oracle_l1_sweep,
-        oracle_auc_sweep,
-        oracle_auc_Z_sweep,
-        oracle_accuracy_sweep,
-        oracle_accuracy_Z_sweep,
-        oracle_norm_sweep,
-    ) = oracle_sweep
-    (
-        unadapted_mean_sweep,
-        unadapted_l1_sweep,
-        unadapted_auc_sweep,
-        unadapted_auc_Z_sweep,
-        unadapted_accuracy_sweep,
-        unadapted_accuracy_Z_sweep,
-        unadapted_norm_sweep,
-    ) = unadapted_sweep
-    mean_sweeps: Curves = {
-        ("Oracle", None, train_batch_size): oracle_mean_sweep,
-        ("Unadapted", None, train_batch_size): unadapted_mean_sweep,
-    }
-    l1_sweeps: Curves = {
-        ("Oracle", None, train_batch_size): oracle_l1_sweep,
-        ("Unadapted", None, train_batch_size): unadapted_l1_sweep,
-    }
-    auc_sweeps: Curves = {
-        ("Oracle", None, train_batch_size): oracle_auc_sweep,
-        ("Unadapted", None, train_batch_size): unadapted_auc_sweep,
-    }
-    auc_Z_sweeps: Curves = {
-        ("Oracle", None, train_batch_size): oracle_auc_Z_sweep,
-        ("Unadapted", None, train_batch_size): unadapted_auc_Z_sweep,
-    }
-    accuracy_sweeps: Curves = {
-        ("Oracle", None, train_batch_size): oracle_accuracy_sweep,
-        ("Unadapted", None, train_batch_size): unadapted_accuracy_sweep,
-    }
-    accuracy_Z_sweeps: Curves = {
-        ("Oracle", None, train_batch_size): oracle_accuracy_Z_sweep,
-        ("Unadapted", None, train_batch_size): unadapted_accuracy_Z_sweep,
-    }
-    norm_sweeps: Curves = {
-        ("Oracle", None, train_batch_size): oracle_norm_sweep,
-        ("Unadapted", None, train_batch_size): unadapted_norm_sweep,
-    }
 
     for (
         prior_strength,
@@ -429,7 +387,7 @@ def main(
         test_argmax_joint,
         test_batch_size,
     ):
-        scheme = (prior_strength, symmetric_dirichlet, fix_marginal)
+        adaptation = ("EM", prior_strength, symmetric_dirichlet, fix_marginal)
         state, (
             mean_sweep,
             l1_sweep,
@@ -446,14 +404,14 @@ def main(
             train_domains_set,
             calibration_domains_set,
             eval_splits,
-            scheme,
+            adaptation,
             argmax_joint,
             batch_size,
             device_count,
             generator,
             num_workers,
         )
-        k = scheme, argmax_joint, batch_size
+        k = adaptation, argmax_joint, batch_size
         mean_sweeps[k] = mean_sweep
         l1_sweeps[k] = l1_sweep
         auc_sweeps[k] = auc_sweep
@@ -495,11 +453,12 @@ def train_fn(
     calibration_batch_size: int,
     calibration_epochs: int,
     calibration_lr: float,
+    adapt_gmtl_alpha: Sequence[float],
     device_count: int,
     key: Any,
     generator: torch.Generator,
     num_workers: int,
-) -> Tuple[TrainState, Sweeps, Sweeps,]:
+) -> Tuple[TrainState, Curves, Curves, Curves, Curves, Curves, Curves, Curves]:
     if len(calibration) == 0 and calibration_epochs > 0:
         raise ValueError("Calibration set may not be empty")
 
@@ -640,10 +599,20 @@ def train_fn(
 
     print("===> Adapting & Evaluating")
 
-    # batch size does not matter since we are not doing adaptation
-    sweeps = []
-    for scheme in("Oracle", "Unadapted"):
-        state, sweep = adapt_fn(
+    mean_sweeps = {}
+    l1_sweeps = {}
+    auc_sweeps = {}
+    auc_Z_sweeps = {}
+    accuracy_sweeps = {}
+    accuracy_Z_sweeps = {}
+    norm_sweeps = {}
+
+    adaptations: List[Adaptation] = [("Null",), ("Oracle",)]
+    adaptations.extend(("GMTL", alpha) for alpha in adapt_gmtl_alpha)
+    for adaptation in adaptations:
+        argmax_joint = False
+        batch_size = train_batch_size   # batch size does not matter since we are not adapting on data
+        state, (mean, l1, auc, auc_Z, accuracy, accuracy_Z, norm) = adapt_fn(
             state,
             C,
             K,
@@ -651,20 +620,30 @@ def train_fn(
             train_domains_set,
             calibration_domains_set,
             eval_splits,
-            scheme,
-            False,
-            train_batch_size,
+            adaptation,
+            argmax_joint,
+            batch_size,
             device_count,
             generator,
             num_workers,
         )
-        sweeps.append(sweep)
-    oracle_sweep, unadapted_sweep = sweeps
+        mean_sweeps[adaptation, argmax_joint, batch_size] = mean
+        l1_sweeps[adaptation, argmax_joint, batch_size] = l1
+        auc_sweeps[adaptation, argmax_joint, batch_size] = auc
+        auc_Z_sweeps[adaptation, argmax_joint, batch_size] = auc_Z
+        accuracy_sweeps[adaptation, argmax_joint, batch_size] = accuracy
+        accuracy_Z_sweeps[adaptation, argmax_joint, batch_size] = accuracy_Z
+        norm_sweeps[adaptation, argmax_joint, batch_size] = norm
 
     return (
         state,
-        oracle_sweep,
-        unadapted_sweep,
+        mean_sweeps,
+        l1_sweeps,
+        auc_sweeps,
+        auc_Z_sweeps,
+        accuracy_sweeps,
+        accuracy_Z_sweeps,
+        norm_sweeps,
     )
 
 
@@ -676,14 +655,14 @@ def adapt_fn(
     train_domains_set: Set[int],
     calibration_domains_set: Set[int],
     eval_splits: Sequence[Tuple[torch.Tensor, Dataset]],
-    scheme: Union[Scheme, str],
+    adaptation: Adaptation,
     argmax_joint: bool,
     batch_size: int,
     device_count: int,
     generator: torch.Generator,
     num_workers: int,
 ) -> Tuple[TrainState, Sweeps]:
-    label = f"{scheme = }, {argmax_joint = }, {batch_size = }"
+    label = f"{adaptation = }, {argmax_joint = }, {batch_size = }"
     print(f"---> {label}")
 
     mean_sweep = jnp.empty(len(eval_splits))
@@ -758,8 +737,23 @@ def adapt_fn(
             epoch_Y = epoch_Y.at[offset : offset + N].set(Y.flatten())
             epoch_Z = epoch_Z.at[offset : offset + N].set(Z.flatten())
 
-            if isinstance(scheme, tuple):
-                prior_strength, symmetric_dirichlet, fix_marginal = scheme
+            if adaptation[0] == "Null":
+                prior = state.prior.unfreeze()
+                prior["target"] = prior["source"]
+                state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
+            elif adaptation[0] == "Oracle":
+                prior = state.prior.unfreeze()
+                prior["target"] = replicate(joint_M.flatten())
+                state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
+            elif adaptation[0] == "GMTL":
+                _, alpha = adaptation
+                prior = state.prior.unfreeze()
+                target = prior["source"]**(1-alpha)
+                target = target / jnp.sum(-1, keepdims=True)
+                prior["target"] = target
+                state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
+            elif adaptation[0] == "EM":
+                _, prior_strength, symmetric_dirichlet, fix_marginal = adaptation
                 state = adapt_step(
                     state,
                     X,
@@ -769,16 +763,8 @@ def adapt_fn(
                     C,
                     K,
                 )
-            elif scheme == "Oracle":
-                prior = state.prior.unfreeze()
-                prior["target"] = replicate(joint_M.flatten())
-                state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
-            elif scheme == "Unadapted":
-                prior = state.prior.unfreeze()
-                prior["target"] = prior["source"]
-                state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
             else:
-                raise ValueError(f"Unknown adaptation scheme {scheme}")
+                raise ValueError(f"Unknown adaptation scheme {adaptation}")
 
             (score, hit), (score_Z, hit_Z) = test_step(state, X, Y, Z, argmax_joint)
 

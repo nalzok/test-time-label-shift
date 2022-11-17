@@ -1,12 +1,16 @@
-from typing import Tuple, Dict, Optional
+from typing import Tuple, Dict, Union, Literal
 
 import jax.numpy as jnp
 
 
-Scheme = Tuple[float, bool, bool]
+AdaptationNull = Tuple[Literal["Null"]]
+AdaptationOracle = Tuple[Literal["Oracle"]]
+AdaptationGMTL = Tuple[Literal["GMTL"], float]
+AdaptationEM = Tuple[Literal["EM"], float, bool, bool]
+Adaptation = Union[AdaptationNull, AdaptationOracle, AdaptationGMTL, AdaptationEM]
 
 Curves = Dict[
-    Tuple[str, Optional[Scheme], int],
+    Tuple[Adaptation, bool, int],
     jnp.ndarray,
 ]
 
