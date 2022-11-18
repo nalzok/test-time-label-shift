@@ -105,7 +105,7 @@ def plot(
             sweep = sweeps.pop((adaptation, argmax_joint, batch_size))
             linestyle = "dotted" if baseline == "Null" else "dashdot"
             label = f"[{baseline}]"
-            ax.plot(confounder_strength, sweep[:-1], linestyle="dotted", linewidth=2, label=label)
+            ax.plot(confounder_strength, sweep[:-1], linestyle=linestyle, linewidth=2, label=label)
 
         for (adaptation, argmax_joint, batch_size), sweep in sweeps.items():
             if adaptation[0] == "GMTL":
@@ -123,7 +123,7 @@ def plot(
             ax.plot(confounder_strength, sweep[:-1], linestyle=linestyle, linewidth=2, label=label)
 
         for i in train_domains_set:
-            ax.axvline(confounder_strength[i], linestyle=":")
+            ax.axvline(confounder_strength[i], linestyle="dotted")
 
         plt.ylim((0, 1))
         plt.xlabel("Shift parameter")
