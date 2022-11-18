@@ -103,20 +103,24 @@ def plot(
         for baseline in ("Oracle", "Null"):
             adaptation = (baseline,)
             sweep = sweeps.pop((adaptation, argmax_joint, batch_size))
+            linestyle = "dotted" if baseline == "Null" else "dashdot"
             label = f"[{baseline}]"
-            ax.plot(confounder_strength, sweep[:-1], linestyle="--", linewidth=2, label=label)
+            ax.plot(confounder_strength, sweep[:-1], linestyle="dotted", linewidth=2, label=label)
 
         for (adaptation, argmax_joint, batch_size), sweep in sweeps.items():
             if adaptation[0] == "GMTL":
                 _, alpha = adaptation
-                label = f"[GMTL] {alpha = }, {argmax_joint = }, {batch_size = }"
+                linestyle = "dashed"
+                label = f"[GMTL] {alpha = }"
             elif adaptation[0] == "EM":
                 _, prior_strength, symmetric_dirichlet, fix_marginal = adaptation
-                label = f"[EM] {prior_strength = }, {symmetric_dirichlet = }, {fix_marginal = }, {argmax_joint = }, {batch_size = }"
+                del symmetric_dirichlet, fix_marginal
+                linestyle = "solid"
+                label = f"[EM] {prior_strength = }, {batch_size = }"
             else:
                 raise ValueError(f"Unknown adaptation scheme {adaptation}")
 
-            ax.plot(confounder_strength, sweep[:-1], linewidth=2, label=label)
+            ax.plot(confounder_strength, sweep[:-1], linestyle=linestyle, linewidth=2, label=label)
 
         for i in train_domains_set:
             ax.axvline(confounder_strength[i], linestyle=":")

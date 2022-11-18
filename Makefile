@@ -76,7 +76,7 @@ chexpert:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 9 \
+		--train_domains 8 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
@@ -138,7 +138,7 @@ chexpert:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 9 \
+		--train_domains 8 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
@@ -200,7 +200,7 @@ chexpert:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 9 \
+		--train_domains 8 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
@@ -262,7 +262,7 @@ chexpert:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 9 \
+		--train_domains 8 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
