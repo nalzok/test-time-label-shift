@@ -128,7 +128,7 @@ def plot(
         plt.ylabel(ylabel)
         plt.title(plot_title)
         plt.grid(True)
-        plt.legend(loc="lower center", bbox_to_anchor=(0.5, -0.35), ncol=3, frameon=False)
+        plt.legend(loc="lower center", bbox_to_anchor=(0.5, -0.35), ncol=2, frameon=False)
 
         format_axes(ax)
         for suffix in ("png", "pdf"):
