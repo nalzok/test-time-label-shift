@@ -96,7 +96,6 @@ paper-chexpert:
 		--dataset_Y_column EFFUSION \
 		--dataset_Z_column GENDER \
 		--dataset_use_embedding True \
-		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
@@ -127,7 +126,6 @@ paper-chexpert:
 		--dataset_Y_column EFFUSION \
 		--dataset_Z_column GENDER \
 		--dataset_use_embedding True \
-		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
@@ -158,7 +156,6 @@ paper-chexpert:
 		--dataset_Y_column EFFUSION \
 		--dataset_Z_column GENDER \
 		--dataset_use_embedding True \
-		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
@@ -189,7 +186,6 @@ paper-chexpert:
 		--dataset_Y_column PNEUMONIA \
 		--dataset_Z_column GENDER \
 		--dataset_use_embedding True \
-		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
@@ -220,7 +216,6 @@ paper-chexpert:
 		--dataset_Y_column PNEUMONIA \
 		--dataset_Z_column GENDER \
 		--dataset_use_embedding True \
-		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
@@ -251,7 +246,6 @@ paper-chexpert:
 		--dataset_Y_column PNEUMONIA \
 		--dataset_Z_column GENDER \
 		--dataset_use_embedding True \
-		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
@@ -282,7 +276,6 @@ paper-chexpert:
 		--dataset_Y_column GENDER \
 		--dataset_Z_column EFFUSION \
 		--dataset_use_embedding True \
-		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
@@ -313,7 +306,6 @@ paper-chexpert:
 		--dataset_Y_column GENDER \
 		--dataset_Z_column EFFUSION \
 		--dataset_use_embedding True \
-		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
@@ -344,7 +336,6 @@ paper-chexpert:
 		--dataset_Y_column GENDER \
 		--dataset_Z_column EFFUSION \
 		--dataset_use_embedding True \
-		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
@@ -375,7 +366,6 @@ paper-chexpert:
 		--dataset_Y_column PNEUMONIA \
 		--dataset_Z_column EFFUSION \
 		--dataset_use_embedding True \
-		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
@@ -406,7 +396,6 @@ paper-chexpert:
 		--dataset_Y_column PNEUMONIA \
 		--dataset_Z_column EFFUSION \
 		--dataset_use_embedding True \
-		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
@@ -437,7 +426,6 @@ paper-chexpert:
 		--dataset_Y_column PNEUMONIA \
 		--dataset_Z_column EFFUSION \
 		--dataset_use_embedding True \
-		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
