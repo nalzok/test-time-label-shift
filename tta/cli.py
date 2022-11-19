@@ -24,7 +24,8 @@ from tta.datasets import MultipleDomainDataset, split
 from tta.datasets.mnist import MultipleDomainMNIST
 from tta.datasets.coco import ColoredCOCO
 from tta.datasets.waterbirds import MultipleDomainWaterbirds
-from tta.datasets.chexpert import MultipleDomainCheXpert
+from tta.datasets.cxr.chexpert import MultipleDomainCheXpert
+from tta.datasets.cxr.mimic import MultipleDomainMIMIC
 from tta.train import (
     TrainState,
     create_train_state,
@@ -43,7 +44,7 @@ from tta.visualize import latexify, plot
 @click.option("--config_name", type=str, required=True)
 @click.option(
     "--dataset_name",
-    type=click.Choice(["MNIST", "COCO", "Waterbirds", "CheXpert"]),
+    type=click.Choice(["MNIST", "COCO", "Waterbirds", "CheXpert", "MIMIC"]),
     required=True,
 )
 @click.option("--dataset_Y_column", type=str, required=False)
@@ -273,6 +274,24 @@ def prepare_dataset(
         root = Path("data/CheXpert")
         target_domain_count = 512
         dataset = MultipleDomainCheXpert(
+            root,
+            train_domains_set,
+            generator,
+            dataset_y_column,
+            dataset_z_column,
+            dataset_use_embedding,
+            target_domain_count,
+        )
+    elif dataset_name == "MIMIC":
+        assert dataset_y_column is not None
+        assert dataset_z_column is not None
+        assert dataset_use_embedding is True
+        assert dataset_apply_rotation is None
+        assert dataset_label_noise == 0
+
+        root = Path("data/MIMIC")
+        target_domain_count = 512
+        dataset = MultipleDomainMIMIC(
             root,
             train_domains_set,
             generator,

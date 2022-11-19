@@ -88,12 +88,74 @@ paper-mnist:
 		--num_workers 48 \
 		--plot_only False
 
+debug:
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name mimic_pneumonia_edema_100_20_domain2 \
+		--dataset_name MIMIC \
+		--dataset_Y_column Pneumonia \
+		--dataset_Z_column Edema \
+		--dataset_use_embedding True \
+		--dataset_label_noise 0 \
+		--train_joint True \
+		--train_model Linear \
+		--train_domains 2 \
+		--train_fraction 0.9 \
+		--train_calibration_fraction 0.1 \
+		--train_batch_size 64 \
+		--train_epochs 100 \
+		--train_lr 1e-3 \
+		--calibration_batch_size 64 \
+		--calibration_epochs 20 \
+		--calibration_lr 1e-3 \
+		--adapt_gmtl_alpha -1 \
+		--adapt_gmtl_alpha 0.5 \
+		--adapt_gmtl_alpha 2 \
+		--adapt_prior_strength 1 \
+		--adapt_symmetric_dirichlet False \
+		--adapt_fix_marginal False \
+		--test_argmax_joint False \
+		--test_batch_size 512 \
+		--seed 2022 \
+		--num_workers 48 \
+		--plot_only True
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name mimic_effusion_edema_100_20_domain2 \
+		--dataset_name MIMIC \
+		--dataset_Y_column "Pleural Effusion" \
+		--dataset_Z_column Edema \
+		--dataset_use_embedding True \
+		--dataset_label_noise 0 \
+		--train_joint True \
+		--train_model Linear \
+		--train_domains 2 \
+		--train_fraction 0.9 \
+		--train_calibration_fraction 0.1 \
+		--train_batch_size 64 \
+		--train_epochs 100 \
+		--train_lr 1e-3 \
+		--calibration_batch_size 64 \
+		--calibration_epochs 20 \
+		--calibration_lr 1e-3 \
+		--adapt_gmtl_alpha -1 \
+		--adapt_gmtl_alpha 0.5 \
+		--adapt_gmtl_alpha 2 \
+		--adapt_prior_strength 1 \
+		--adapt_symmetric_dirichlet False \
+		--adapt_fix_marginal False \
+		--test_argmax_joint False \
+		--test_batch_size 512 \
+		--seed 2022 \
+		--num_workers 48 \
+		--plot_only False
+
 paper-chexpert:
 	pipenv run python3 \
 		-m tta.cli \
 		--config_name effusion_gender_100_20_balanced \
 		--dataset_name CheXpert \
-		--dataset_Y_column EFFUSION \
+		--dataset_Y_column PNEUMONIA \
 		--dataset_Z_column GENDER \
 		--dataset_use_embedding True \
 		--dataset_label_noise 0 \

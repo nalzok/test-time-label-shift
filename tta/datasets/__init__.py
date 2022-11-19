@@ -17,7 +17,7 @@ class MultipleDomainDataset:
         self.C: int = C
         self.K: int = K
         self.confounder_strength: np.ndarray = confounder_strength
-        self.train_domain: str = train_domain
+        self.train_domain: int = train_domain
         self.hexdigest: str = hexdigest
         self.domains: List[Tuple[torch.Tensor, Dataset]] = []
 
