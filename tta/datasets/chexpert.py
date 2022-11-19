@@ -14,28 +14,40 @@ from tta.datasets import MultipleDomainDataset
 
 class MultipleDomainCheXpert(MultipleDomainDataset):
 
-    def __init__(self, root, generator, Y_column, Z_column, use_embedding, train_domains, target_domain_count):
+    def __init__(self, root, train_domains, generator, Y_column: str, Z_column: str, use_embedding: bool, target_domain_count: int):
+        if len(train_domains) != 1:
+            raise NotImplementedError(
+                "Training on multiple source distributions is not supported yet."
+            )
+        train_domain = next(iter(train_domains))
+
         if use_embedding:
             input_shape = (1, 1376)
         else:
             input_shape = (1, 224, 224, 3)
         C = 2
         K = 2
-        confounder_strength = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-        super().__init__(input_shape, C, K, confounder_strength)
-
-        if len(train_domains) != 1:
-            raise NotImplementedError(
-                "Training on multiple source distributions is not supported yet."
-            )
+        confounder_strength = np.linspace(0, 1, 21)
 
         m = sha256()
+        m.update(self.__class__.__name__.encode())
+        m.update(str(sorted(train_domains)).encode())
+        m.update(generator.get_state().numpy().data.hex().encode())
         m.update(Y_column.encode())
         m.update(Z_column.encode())
         m.update(str(use_embedding).encode())
-        m.update(str(train_domains).encode())
         m.update(str(target_domain_count).encode())
-        cache_key = m.hexdigest()
+
+        m.update(str(input_shape).encode())
+        m.update(str(C).encode())
+        m.update(str(K).encode())
+        m.update(confounder_strength.data.hex().encode())
+        m.update(str(train_domain).encode())
+        hexdigest = m.hexdigest()
+
+        super().__init__(input_shape, C, K, confounder_strength, train_domain, hexdigest)
+
+        cache_key = f'{train_domain}_{Y_column}_{Z_column}_{use_embedding}_{target_domain_count}_{hexdigest}'
         cache_file = root / 'cached' / f'{cache_key}.pt'
         if cache_file.is_file():
             # NOTE: The torch.Generator state won't be the same if we load from cache
@@ -43,7 +55,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             self.domains = torch.load(cache_file)
             return
 
-        print(f'Building datasets... (this may take a while)')
+        print('Building datasets... (this may take a while)')
         if root is None:
             raise ValueError('Data directory not specified!')
 
@@ -93,20 +105,20 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
         # joint distribution of Y and Z
         if Y_column == "PNEUMONIA" and Z_column == "EFFUSION":
             # PNEUMONIA EFFUSION [ 1395  2702 69011 66799]
-            confounder1 = np.array([[0.025, 0.0], [0.0, 0.975]])
-            confounder2 = np.array([[0.0, 0.025], [0.975, 0.0]])
+            anchor1 = np.array([[0.025, 0.0], [0.0, 0.975]])
+            anchor2 = np.array([[0.0, 0.025], [0.975, 0.0]])
         elif Y_column == "PNEUMONIA" and Z_column == "GENDER":
             # PNEUMONIA GENDER [ 1939  2718 69209 98645]
-            confounder1 = np.array([[0.025, 0.0], [0.0, 0.975]])
-            confounder2 = np.array([[0.0, 0.025], [0.975, 0.0]])
+            anchor1 = np.array([[0.025, 0.0], [0.0, 0.975]])
+            anchor2 = np.array([[0.0, 0.025], [0.975, 0.0]])
         elif Y_column == "EFFUSION" and Z_column == "GENDER":
             # EFFUSION GENDER [31900 44826 32053 46822]
-            confounder1 = np.array([[0.5, 0.0], [0.0, 0.5]])
-            confounder2 = np.array([[0.0, 0.5], [0.5, 0.0]])
+            anchor1 = np.array([[0.5, 0.0], [0.0, 0.5]])
+            anchor2 = np.array([[0.0, 0.5], [0.5, 0.0]])
         elif Y_column == "GENDER" and Z_column == "EFFUSION":
             # GENDER EFFUSION [31900 32053 44826 46822]
-            confounder1 = np.array([[0.5, 0.0], [0.0, 0.5]])
-            confounder2 = np.array([[0.0, 0.5], [0.5, 0.0]])
+            anchor1 = np.array([[0.5, 0.0], [0.0, 0.5]])
+            anchor2 = np.array([[0.0, 0.5], [0.5, 0.0]])
         else:
             raise NotImplementedError(f"Please specify confounders for (Y, Z) = ({Y_column}, {Z_column})")
 
@@ -119,14 +131,14 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
 
             quota = labels["M"].loc[mask].value_counts(ascending=True).to_numpy() - target_domain_count
             quota = torch.from_numpy(quota)
-            joint_M = torch.from_numpy(strength * confounder1 + (1-strength) * confounder2)
+            joint_M = torch.from_numpy(strength * anchor1 + (1-strength) * anchor2)
             joint_M_flatten = joint_M.flatten()
             count = torch.round(torch.min(quota/joint_M_flatten)*joint_M_flatten).long()
             count = count.reshape((2, 2))
             joint_M = count / torch.sum(count)
 
             print(f"histogram(M) = {count.flatten()}")
-            reservation = np.ceil(target_domain_count * np.maximum(confounder1, confounder2).flatten())
+            reservation = np.ceil(target_domain_count * np.maximum(anchor1, anchor2).flatten())
             domain, in_sample_patients = self.sample(datastore, labels, mask, count, reservation)
             mask &= ~labels["patient_id"].isin(in_sample_patients)
             domains[i] = (joint_M, domain)
@@ -140,7 +152,7 @@ class MultipleDomainCheXpert(MultipleDomainDataset):
             if i in train_domains:
                 continue
 
-            joint_M = torch.from_numpy(strength * confounder1 + (1-strength) * confounder2)
+            joint_M = torch.from_numpy(strength * anchor1 + (1-strength) * anchor2)
             joint_M_flatten = joint_M.flatten()
             count = torch.round(target_domain_count * joint_M_flatten).long()
 

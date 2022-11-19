@@ -294,3 +294,4 @@ logs/**.txt
 plots/**.png
 plots/**.pdf
 npz/**.npz
+checkpoints/**

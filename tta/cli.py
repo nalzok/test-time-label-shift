@@ -1,5 +1,6 @@
 from typing import Any, Sequence, List, Tuple, Set, Optional, Dict
 from pathlib import Path
+from hashlib import sha256
 import sys
 import random
 from itertools import product
@@ -9,6 +10,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.compilation_cache.compilation_cache import initialize_cache
 import flax
+from flax.training.checkpoints import save_checkpoint, restore_checkpoint
 from flax.jax_utils import replicate, unreplicate
 import numpy as np
 import torch
@@ -44,15 +46,15 @@ from tta.visualize import latexify, plot
     type=click.Choice(["MNIST", "COCO", "Waterbirds", "CheXpert"]),
     required=True,
 )
-@click.option("--dataset_Y_column", type=str, required=True)
-@click.option("--dataset_Z_column", type=str, required=True)
-@click.option("--dataset_use_embedding", type=bool, required=True)
-@click.option("--dataset_apply_rotation", type=bool, required=True)
+@click.option("--dataset_Y_column", type=str, required=False)
+@click.option("--dataset_Z_column", type=str, required=False)
+@click.option("--dataset_use_embedding", type=bool, required=False)
+@click.option("--dataset_apply_rotation", type=bool, required=False)
 @click.option("--dataset_label_noise", type=float, required=True)
 @click.option("--train_joint", type=bool, required=True)
 @click.option("--train_model", type=str, required=True)
 @click.option(
-    "--train_checkpoint_path", type=click.Path(path_type=Path), required=False
+    "--train_pretrained_path", type=click.Path(path_type=Path), required=False
 )
 @click.option("--train_domains", type=str, required=True)
 @click.option("--train_fraction", type=float, required=True)
@@ -80,14 +82,14 @@ from tta.visualize import latexify, plot
 def cli(
     config_name: str,
     dataset_name: str,
-    dataset_y_column: str,
-    dataset_z_column: str,
-    dataset_use_embedding: bool,
-    dataset_apply_rotation: bool,
+    dataset_y_column: Optional[str],
+    dataset_z_column: Optional[str],
+    dataset_use_embedding: Optional[bool],
+    dataset_apply_rotation: Optional[bool],
     dataset_label_noise: float,
     train_joint: bool,
     train_model: str,
-    train_checkpoint_path: Optional[Path],
+    train_pretrained_path: Optional[Path],
     train_domains: str,
     train_fraction: float,
     train_calibration_fraction: float,
@@ -162,7 +164,7 @@ def cli(
             dataset_label_noise,
             train_joint,
             train_model,
-            train_checkpoint_path,
+            train_pretrained_path,
             train_batch_size,
             train_epochs,
             train_lr,
@@ -194,10 +196,10 @@ def cli(
 
 def prepare_dataset(
     dataset_name: str,
-    dataset_y_column: str,
-    dataset_z_column: str,
-    dataset_use_embedding: bool,
-    dataset_apply_rotation: bool,
+    dataset_y_column: Optional[str],
+    dataset_z_column: Optional[str],
+    dataset_use_embedding: Optional[bool],
+    dataset_apply_rotation: Optional[bool],
     dataset_label_noise: float,
     train_domains: str,
     train_fraction: float,
@@ -229,52 +231,54 @@ def prepare_dataset(
         calibration_fraction = 1.0
 
     if dataset_name == "MNIST":
+        assert dataset_y_column is None
+        assert dataset_z_column is None
+        assert dataset_use_embedding is None
+        assert dataset_apply_rotation is not None
+
         root = Path("data/mnist")
         dataset = MultipleDomainMNIST(
             root,
-            generator,
             train_domains_set,
+            generator,
             dataset_apply_rotation,
             dataset_label_noise,
         )
     elif dataset_name == "COCO":
-        assert (
-            dataset_apply_rotation is False
-        ), "Parameter dataset_apply_rotation is not supported with COCO"
-        assert (
-            dataset_label_noise == 0
-        ), "Parameter dataset_label_noise is not supported with COCO"
+        assert dataset_y_column is None
+        assert dataset_z_column is None
+        assert dataset_use_embedding is None
+        assert dataset_apply_rotation is None
+        assert dataset_label_noise == 0
 
         root = Path("data/COCO/train2017")
         annFile = Path("data/COCO/annotations/instances_train2017.json")
         dataset = ColoredCOCO(root, annFile, generator)
     elif dataset_name == "Waterbirds":
-        assert (
-            dataset_apply_rotation is False
-        ), "Parameter dataset_apply_rotation is not supported with Waterbirds"
-        assert (
-            dataset_label_noise == 0
-        ), "Parameter dataset_label_noise is not supported with Waterbirds"
+        assert dataset_y_column is None
+        assert dataset_z_column is None
+        assert dataset_use_embedding is None
+        assert dataset_apply_rotation is None
+        assert dataset_label_noise == 0
 
         root = Path("data/")
         dataset = MultipleDomainWaterbirds(root, generator)
     elif dataset_name == "CheXpert":
-        assert (
-            dataset_apply_rotation is False
-        ), "Parameter dataset_apply_rotation is not supported with CheXpert"
-        assert (
-            dataset_label_noise == 0
-        ), "Parameter dataset_label_noise is not supported with CheXpert"
+        assert dataset_y_column is not None
+        assert dataset_z_column is not None
+        assert dataset_use_embedding is not None
+        assert dataset_apply_rotation is None
+        assert dataset_label_noise == 0
 
         root = Path("data/CheXpert")
         target_domain_count = 512
         dataset = MultipleDomainCheXpert(
             root,
+            train_domains_set,
             generator,
             dataset_y_column,
             dataset_z_column,
             dataset_use_embedding,
-            train_domains_set,
             target_domain_count,
         )
     else:
@@ -321,7 +325,7 @@ def main(
     dataset_label_noise: float,
     train_joint: bool,
     train_model: str,
-    train_checkpoint_path: Optional[Path],
+    train_pretrained_path: Optional[Path],
     train_batch_size: int,
     train_epochs: int,
     train_lr: float,
@@ -350,27 +354,36 @@ def main(
             batch_size % device_count == 0
         ), f"test_batch_size should be divisible by {device_count}"
 
-    (state, mean_sweeps, l1_sweeps, auc_sweeps, auc_Z_sweeps, accuracy_sweeps, accuracy_Z_sweeps, norm_sweeps) = train_fn(
+    state = train_fn(
         dataset,
         train,
         calibration,
-        eval_splits,
-        dataset_label_noise,
         train_joint,
         train_model,
-        train_checkpoint_path,
-        train_domains_set,
+        train_pretrained_path,
         train_batch_size,
         train_epochs,
         train_lr,
-        calibration_domains_set,
         calibration_batch_size,
         calibration_epochs,
         calibration_lr,
-        adapt_gmtl_alpha,
-        device_count,
         key,
         generator,
+        device_count,
+        num_workers,
+    )
+
+    mean_sweeps, l1_sweeps, auc_sweeps, auc_Z_sweeps, accuracy_sweeps, accuracy_Z_sweeps, norm_sweeps = baseline_fn(
+        state,
+        dataset,
+        eval_splits,
+        dataset_label_noise,
+        train_domains_set,
+        train_batch_size,
+        calibration_domains_set,
+        adapt_gmtl_alpha,
+        generator,
+        device_count,
         num_workers,
     )
 
@@ -440,25 +453,20 @@ def train_fn(
     dataset: MultipleDomainDataset,
     train: ConcatDataset,
     calibration: ConcatDataset,
-    eval_splits: List[Tuple[torch.Tensor, Dataset]],
-    dataset_label_noise: float,
     train_joint: bool,
     train_model: str,
-    train_checkpoint_path: Optional[Path],
-    train_domains_set: Set[int],
+    train_pretrained_path: Optional[Path],
     train_batch_size: int,
     train_epochs: int,
     train_lr: float,
-    calibration_domains_set: Set[int],
     calibration_batch_size: int,
     calibration_epochs: int,
     calibration_lr: float,
-    adapt_gmtl_alpha: Sequence[float],
-    device_count: int,
     key: Any,
     generator: torch.Generator,
+    device_count: int,
     num_workers: int,
-) -> Tuple[TrainState, Curves, Curves, Curves, Curves, Curves, Curves, Curves]:
+) -> TrainState:
     if len(calibration) == 0 and calibration_epochs > 0:
         raise ValueError("Calibration set may not be empty")
 
@@ -474,8 +482,27 @@ def train_fn(
         specimen,
         device_count,
     )
-    if train_checkpoint_path is not None:
-        state = restore_train_state(state, train_checkpoint_path)
+    if train_pretrained_path is not None:
+        state = restore_train_state(state, train_pretrained_path)
+
+    m = sha256()
+    m.update(dataset.hexdigest.encode())
+    m.update(str(train_joint).encode())
+    m.update(train_model.encode())
+    m.update(str(train_pretrained_path).encode())
+    m.update(str((train_batch_size, train_epochs, train_lr)).encode())
+    m.update(str((calibration_batch_size, calibration_epochs, calibration_lr)).encode())
+    m.update(str(key).encode())
+    hexdigest = m.hexdigest()
+
+    prefix = f"{dataset.__class__.__name__}_{dataset.train_domain}_{train_model}_{train_epochs}_{calibration_epochs}_{hexdigest}_"
+    restored = restore_checkpoint("checkpoints/", state, prefix=prefix)
+    if restored is not state:
+        print(f"Restoring checkpoint with {prefix = }")
+        return replicate(restored)
+    else:
+        print(f"Cannot find checkpoint with {prefix = }")
+
     state: TrainState = replicate(state)
 
     print("===> Training")
@@ -588,15 +615,31 @@ def train_fn(
 
     print("---> Induced source label prior =", source_prior_induced)
     print("---> Empirical source label prior =", source_prior_empirical)
-    print(
-        "---> Total variation distance =",
-        jnp.sum(jnp.abs(source_prior_induced - source_prior_empirical)) / 2,
-    )
+    tvd = jnp.sum(jnp.abs(source_prior_induced - source_prior_empirical)) / 2
+    print("---> Total variation distance =", tvd)
 
     prior = state.prior.unfreeze()
     prior["source"] = replicate(source_prior_induced)
     state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
 
+    save_checkpoint("checkpoints/", unreplicate(state), -tvd, prefix)
+
+    return state
+
+
+def baseline_fn(
+    state: TrainState,
+    dataset: MultipleDomainDataset,
+    eval_splits: List[Tuple[torch.Tensor, Dataset]],
+    dataset_label_noise: float,
+    train_domains_set: Set[int],
+    train_batch_size: int,
+    calibration_domains_set: Set[int],
+    adapt_gmtl_alpha: Sequence[float],
+    generator: torch.Generator,
+    device_count: int,
+    num_workers: int,
+):
     print("===> Adapting & Evaluating")
 
     mean_sweeps = {}
@@ -614,8 +657,8 @@ def train_fn(
         batch_size = train_batch_size   # batch size does not matter since we are not adapting on data
         state, (mean, l1, auc, auc_Z, accuracy, accuracy_Z, norm) = adapt_fn(
             state,
-            C,
-            K,
+            dataset.C,
+            dataset.K,
             dataset_label_noise,
             train_domains_set,
             calibration_domains_set,
@@ -635,16 +678,7 @@ def train_fn(
         accuracy_Z_sweeps[adaptation, argmax_joint, batch_size] = accuracy_Z
         norm_sweeps[adaptation, argmax_joint, batch_size] = norm
 
-    return (
-        state,
-        mean_sweeps,
-        l1_sweeps,
-        auc_sweeps,
-        auc_Z_sweeps,
-        accuracy_sweeps,
-        accuracy_Z_sweeps,
-        norm_sweeps,
-    )
+    return mean_sweeps, l1_sweeps, auc_sweeps, auc_Z_sweeps, accuracy_sweeps, accuracy_Z_sweeps, norm_sweeps
 
 
 def adapt_fn(

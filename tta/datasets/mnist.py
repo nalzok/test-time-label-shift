@@ -14,28 +14,47 @@ from tta.datasets import MultipleDomainDataset
 
 class MultipleDomainMNIST(MultipleDomainDataset):
 
-    def __init__(self, root, generator, train_domains, apply_rotation, label_noise):
+    def __init__(self, root, train_domains, generator, apply_rotation: bool, label_noise: float):
+        if len(train_domains) != 1:
+            raise NotImplementedError(
+                "Training on multiple source distributions is not supported yet."
+            )
+        train_domain = next(iter(train_domains))
+
         self.colors = torch.ByteTensor([
             (1, 0, 0),
             (0, 1, 0),
         ])
         if apply_rotation:
-            self.angles = [0, 15]
+            self.angles = torch.ShortTensor([0, 15])
         else:
-            self.angles = [0]
+            self.angles = torch.ShortTensor([0])
         self.Z = torch.LongTensor([(c_idx, r_idx) for c_idx in range(len(self.colors)) for r_idx in range(len(self.angles))])
 
         input_shape = (1, 28, 28, 3)
         C = 2
         K = len(self.Z)
-        confounder_strength = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-        super().__init__(input_shape, C, K, confounder_strength)
+        confounder_strength = np.linspace(0, 1, 21)
 
         m = sha256()
-        m.update(str(train_domains).encode())
+        m.update(self.__class__.__name__.encode())
+        m.update(str(sorted(train_domains)).encode())
+        m.update(generator.get_state().numpy().data.hex().encode())
         m.update(str(apply_rotation).encode())
         m.update(str(label_noise).encode())
-        cache_key = m.hexdigest()
+        m.update(self.colors.numpy().data.hex().encode())
+        m.update(self.angles.numpy().data.hex().encode())
+
+        m.update(str(input_shape).encode())
+        m.update(str(C).encode())
+        m.update(str(K).encode())
+        m.update(confounder_strength.data.hex().encode())
+        m.update(str(train_domain).encode())
+        hexdigest = m.hexdigest()
+
+        super().__init__(input_shape, C, K, confounder_strength, train_domain, hexdigest)
+
+        cache_key = f'{train_domain}_{apply_rotation}_{label_noise}_{hexdigest}'
         cache_file = root / 'cached' / f'{cache_key}.pt'
         if cache_file.is_file():
             # NOTE: The torch.Generator state won't be the same if we load from cache
@@ -43,7 +62,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
             self.domains = torch.load(cache_file)
             return
 
-        print(f'Building datasets... (this may take a while)')
+        print('Building datasets... (this may take a while)')
         if root is None:
             raise ValueError('Data directory not specified!')
 
@@ -68,17 +87,17 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
         # P(Z|Y)
         if apply_rotation:
-            confounder1 = np.array([[0.5, 0.5, 0.0, 0.0], [0.0, 0.0, 0.5, 0.5]])
-            confounder2 = np.array([[0.0, 0.0, 0.5, 0.5], [0.5, 0.5, 0.0, 0.0]])
+            anchor1 = np.array([[0.5, 0.5, 0.0, 0.0], [0.0, 0.0, 0.5, 0.5]])
+            anchor2 = np.array([[0.0, 0.0, 0.5, 0.5], [0.5, 0.5, 0.0, 0.0]])
         else:
-            confounder1 = np.array([[1.0, 0.0], [0.0, 1.0]])
-            confounder2 = np.array([[0.0, 1.0], [1.0, 0.0]])
+            anchor1 = np.array([[1.0, 0.0], [0.0, 1.0]])
+            anchor2 = np.array([[0.0, 1.0], [1.0, 0.0]])
 
         for i, strength in enumerate(self.confounder_strength):
             offset = 0 if i in train_domains else 1
             images = original_images[offset::2]
             labels = original_labels[offset::2]
-            conditional = torch.from_numpy(strength * confounder1 + (1-strength) * confounder2)
+            conditional = torch.from_numpy(strength * anchor1 + (1-strength) * anchor2)
             domain = self.shift(images, labels, conditional)
 
             counter = Counter(labels.numpy())
@@ -123,7 +142,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
             image = color * image.unsqueeze(-1)
             image = Image.fromarray(image.numpy())
-            image = image.rotate(angle, resample=Image.BILINEAR, fillcolor=tuple(color.tolist()))
+            image = image.rotate(angle.item(), resample=Image.BILINEAR)
             image = to_tensor(image)
             image = image.permute(1, 2, 0)
 

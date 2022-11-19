@@ -33,7 +33,62 @@ small:
 tree:
 	pipenv run python3 -m tree
 
-chexpert:
+paper-mnist:
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name mnist_rotated_0.1_18 \
+		--dataset_name MNIST \
+		--dataset_apply_rotation False \
+		--dataset_label_noise 0.1 \
+		--train_joint True \
+		--train_model LeNet \
+		--train_domains 18 \
+		--train_fraction 0.9 \
+		--train_calibration_fraction 0.1 \
+		--train_batch_size 64 \
+		--train_epochs 10 \
+		--train_lr 1e-3 \
+		--calibration_batch_size 64 \
+		--calibration_epochs 2 \
+		--calibration_lr 1e-3 \
+		--adapt_prior_strength 1 \
+		--adapt_symmetric_dirichlet False \
+		--adapt_fix_marginal False \
+		--test_argmax_joint False \
+		--test_batch_size 512 \
+		--seed 2022 \
+		--num_workers 48 \
+		--plot_only False
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name mnist_rotated_0.1_18_more \
+		--dataset_name MNIST \
+		--dataset_apply_rotation False \
+		--dataset_label_noise 0.1 \
+		--train_joint True \
+		--train_model LeNet \
+		--train_domains 18 \
+		--train_fraction 0.9 \
+		--train_calibration_fraction 0.1 \
+		--train_batch_size 64 \
+		--train_epochs 10 \
+		--train_lr 1e-3 \
+		--calibration_batch_size 64 \
+		--calibration_epochs 2 \
+		--calibration_lr 1e-3 \
+		--adapt_gmtl_alpha -1 \
+		--adapt_gmtl_alpha 0.5 \
+		--adapt_gmtl_alpha 2 \
+		--adapt_prior_strength 1 \
+		--adapt_symmetric_dirichlet False \
+		--adapt_fix_marginal False \
+		--test_argmax_joint False \
+		--test_batch_size 512 \
+		--seed 2022 \
+		--num_workers 48 \
+		--plot_only False
+
+paper-chexpert:
 	pipenv run python3 \
 		-m tta.cli \
 		--config_name effusion_gender_100_20_balanced \
@@ -45,7 +100,7 @@ chexpert:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 5 \
+		--train_domains 10 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
@@ -67,7 +122,7 @@ chexpert:
 		--plot_only False
 	pipenv run python3 \
 		-m tta.cli \
-		--config_name effusion_gender_100_20_skewed \
+		--config_name effusion_gender_100_20_skewed1 \
 		--dataset_name CheXpert \
 		--dataset_Y_column EFFUSION \
 		--dataset_Z_column GENDER \
@@ -76,7 +131,38 @@ chexpert:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 8 \
+		--train_domains 1 \
+		--train_fraction 0.9 \
+		--train_calibration_fraction 0.1 \
+		--train_batch_size 64 \
+		--train_epochs 100 \
+		--train_lr 1e-3 \
+		--calibration_batch_size 64 \
+		--calibration_epochs 20 \
+		--calibration_lr 1e-3 \
+		--adapt_gmtl_alpha -1 \
+		--adapt_gmtl_alpha 0.5 \
+		--adapt_gmtl_alpha 2 \
+		--adapt_prior_strength 1 \
+		--adapt_symmetric_dirichlet False \
+		--adapt_fix_marginal False \
+		--test_argmax_joint False \
+		--test_batch_size 512 \
+		--seed 2022 \
+		--num_workers 48 \
+		--plot_only False
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name effusion_gender_100_20_skewed2 \
+		--dataset_name CheXpert \
+		--dataset_Y_column EFFUSION \
+		--dataset_Z_column GENDER \
+		--dataset_use_embedding True \
+		--dataset_apply_rotation False \
+		--dataset_label_noise 0 \
+		--train_joint True \
+		--train_model Linear \
+		--train_domains 2 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
@@ -107,7 +193,7 @@ chexpert:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 5 \
+		--train_domains 10 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
@@ -129,7 +215,7 @@ chexpert:
 		--plot_only False
 	pipenv run python3 \
 		-m tta.cli \
-		--config_name pneumonia_gender_100_20_skewed \
+		--config_name pneumonia_gender_100_20_skewed1 \
 		--dataset_name CheXpert \
 		--dataset_Y_column PNEUMONIA \
 		--dataset_Z_column GENDER \
@@ -138,7 +224,38 @@ chexpert:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 8 \
+		--train_domains 1 \
+		--train_fraction 0.9 \
+		--train_calibration_fraction 0.1 \
+		--train_batch_size 64 \
+		--train_epochs 100 \
+		--train_lr 1e-3 \
+		--calibration_batch_size 64 \
+		--calibration_epochs 20 \
+		--calibration_lr 1e-3 \
+		--adapt_gmtl_alpha -1 \
+		--adapt_gmtl_alpha 0.5 \
+		--adapt_gmtl_alpha 2 \
+		--adapt_prior_strength 1 \
+		--adapt_symmetric_dirichlet False \
+		--adapt_fix_marginal False \
+		--test_argmax_joint False \
+		--test_batch_size 512 \
+		--seed 2022 \
+		--num_workers 48 \
+		--plot_only False
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name pneumonia_gender_100_20_skewed2 \
+		--dataset_name CheXpert \
+		--dataset_Y_column PNEUMONIA \
+		--dataset_Z_column GENDER \
+		--dataset_use_embedding True \
+		--dataset_apply_rotation False \
+		--dataset_label_noise 0 \
+		--train_joint True \
+		--train_model Linear \
+		--train_domains 2 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
@@ -169,7 +286,7 @@ chexpert:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 5 \
+		--train_domains 10 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
@@ -191,7 +308,7 @@ chexpert:
 		--plot_only False
 	pipenv run python3 \
 		-m tta.cli \
-		--config_name gender_effusion_100_20_skewed \
+		--config_name gender_effusion_100_20_skewed1 \
 		--dataset_name CheXpert \
 		--dataset_Y_column GENDER \
 		--dataset_Z_column EFFUSION \
@@ -200,7 +317,38 @@ chexpert:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 8 \
+		--train_domains 1 \
+		--train_fraction 0.9 \
+		--train_calibration_fraction 0.1 \
+		--train_batch_size 64 \
+		--train_epochs 100 \
+		--train_lr 1e-3 \
+		--calibration_batch_size 64 \
+		--calibration_epochs 20 \
+		--calibration_lr 1e-3 \
+		--adapt_gmtl_alpha -1 \
+		--adapt_gmtl_alpha 0.5 \
+		--adapt_gmtl_alpha 2 \
+		--adapt_prior_strength 1 \
+		--adapt_symmetric_dirichlet False \
+		--adapt_fix_marginal False \
+		--test_argmax_joint False \
+		--test_batch_size 512 \
+		--seed 2022 \
+		--num_workers 48 \
+		--plot_only False
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name gender_effusion_100_20_skewed2 \
+		--dataset_name CheXpert \
+		--dataset_Y_column GENDER \
+		--dataset_Z_column EFFUSION \
+		--dataset_use_embedding True \
+		--dataset_apply_rotation False \
+		--dataset_label_noise 0 \
+		--train_joint True \
+		--train_model Linear \
+		--train_domains 2 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
@@ -231,7 +379,7 @@ chexpert:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 5 \
+		--train_domains 10 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
@@ -253,7 +401,7 @@ chexpert:
 		--plot_only False
 	pipenv run python3 \
 		-m tta.cli \
-		--config_name pneumonia_effusion_100_20_skewed \
+		--config_name pneumonia_effusion_100_20_skewed1 \
 		--dataset_name CheXpert \
 		--dataset_Y_column PNEUMONIA \
 		--dataset_Z_column EFFUSION \
@@ -262,7 +410,38 @@ chexpert:
 		--dataset_label_noise 0 \
 		--train_joint True \
 		--train_model Linear \
-		--train_domains 8 \
+		--train_domains 1 \
+		--train_fraction 0.9 \
+		--train_calibration_fraction 0.1 \
+		--train_batch_size 64 \
+		--train_epochs 100 \
+		--train_lr 1e-3 \
+		--calibration_batch_size 64 \
+		--calibration_epochs 20 \
+		--calibration_lr 1e-3 \
+		--adapt_gmtl_alpha -1 \
+		--adapt_gmtl_alpha 0.5 \
+		--adapt_gmtl_alpha 2 \
+		--adapt_prior_strength 1 \
+		--adapt_symmetric_dirichlet False \
+		--adapt_fix_marginal False \
+		--test_argmax_joint False \
+		--test_batch_size 512 \
+		--seed 2022 \
+		--num_workers 48 \
+		--plot_only False
+	pipenv run python3 \
+		-m tta.cli \
+		--config_name pneumonia_effusion_100_20_skewed2 \
+		--dataset_name CheXpert \
+		--dataset_Y_column PNEUMONIA \
+		--dataset_Z_column EFFUSION \
+		--dataset_use_embedding True \
+		--dataset_apply_rotation False \
+		--dataset_label_noise 0 \
+		--train_joint True \
+		--train_model Linear \
+		--train_domains 2 \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
@@ -295,7 +474,7 @@ sweep:
 		--dataset_apply_rotation False \
 		--dataset_label_noise 0 \
 		--train_model {2} \
-		--train_checkpoint_path pretrained/ResNet50_ImageNet1k \
+		--train_pretrained_path pretrained/ResNet50_ImageNet1k \
 		--train_domains 0 \
 		--train_fraction 1.0 \
 		--train_calibration_fraction 0.1 \

@@ -10,13 +10,15 @@ from tta.utils import Dataset, split_dataset
 
 
 class MultipleDomainDataset:
-    def __init__(self, input_shape, C, K, confounder_strength) -> None:
+    def __init__(self, input_shape, C, K, confounder_strength, train_domain, hexdigest) -> None:
         super().__init__()
 
         self.input_shape: Tuple[int] = input_shape
         self.C: int = C
         self.K: int = K
         self.confounder_strength: np.ndarray = confounder_strength
+        self.train_domain: str = train_domain
+        self.hexdigest: str = hexdigest
         self.domains: List[Tuple[torch.Tensor, Dataset]] = []
 
 
