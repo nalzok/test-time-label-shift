@@ -148,7 +148,7 @@ debug:
 		--test_batch_size 512 \
 		--seed 2022 \
 		--num_workers 48 \
-		--plot_only False
+		--plot_only True
 
 paper-chexpert:
 	pipenv run python3 \

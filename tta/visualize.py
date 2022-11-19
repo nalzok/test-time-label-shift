@@ -73,7 +73,6 @@ def format_axes(ax):
 
 def plot(
     npz_path: Path,
-    train_batch_size: int,
     confounder_strength: np.ndarray,
     train_domains_set: Set[int],
     dataset_label_noise: float,
@@ -98,29 +97,28 @@ def plot(
                     label="Upper bound",
                 )
 
-        argmax_joint = False
-        batch_size = train_batch_size
-        for baseline in ("Oracle", "Null"):
-            adaptation = (baseline,)
-            sweep = sweeps.pop((adaptation, argmax_joint, batch_size))
-            linestyle = "dotted" if baseline == "Null" else "dashdot"
-            label = f"[{baseline}]"
-            ax.plot(confounder_strength, sweep[:-1], linestyle=linestyle, linewidth=2, label=label)
-
-        for (adaptation, argmax_joint, batch_size), sweep in sweeps.items():
-            if adaptation[0] == "GMTL":
-                _, alpha = adaptation
+        for ((algo, *param), argmax_joint, batch_size), sweep in sweeps.items():
+            del argmax_joint
+            if algo == "Null":
+                linestyle = "dashed"
+                label = "[Null]"
+            elif algo == "Oracle":
+                linestyle = "dashdot"
+                label = "[Oracle]"
+            elif algo == "GMTL":
+                alpha, = param
                 linestyle = "dashed"
                 label = f"[GMTL] {alpha = }"
-            elif adaptation[0] == "EM":
-                _, prior_strength, symmetric_dirichlet, fix_marginal = adaptation
+            elif algo == "EM":
+                prior_strength, symmetric_dirichlet, fix_marginal = param
                 del symmetric_dirichlet, fix_marginal
                 linestyle = "solid"
                 label = f"[EM] {prior_strength = }, {batch_size = }"
             else:
-                raise ValueError(f"Unknown adaptation scheme {adaptation}")
+                raise ValueError(f"Unknown adaptation algorithm {algo}")
 
-            ax.plot(confounder_strength, sweep[:-1], linestyle=linestyle, linewidth=2, label=label)
+            ax.plot(confounder_strength, sweep[:-1], marker=".", linestyle=linestyle,
+                    linewidth=2, markersize=12, label=label)
 
         for i in train_domains_set:
             ax.axvline(confounder_strength[i], linestyle="dotted")

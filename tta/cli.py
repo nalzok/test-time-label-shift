@@ -185,7 +185,6 @@ def cli(
 
     plot(
         npz_path,
-        train_batch_size,
         dataset.confounder_strength,
         train_domains_set,
         dataset_label_noise,
