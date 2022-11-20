@@ -154,6 +154,7 @@ sweep-chexpert:
 	parallel \
 		--eta \
 		--jobs 1 \
+		--joblog joblog.txt \
 		pipenv run python3 \
 		-m tta.cli \
 		--config_name chexpert_{1}_{2}_domain{3}_train{4}_cali{5} \
