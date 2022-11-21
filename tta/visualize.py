@@ -93,32 +93,80 @@ def plot(
                     confounder_strength,
                     upper_bound,
                     color="grey",
-                    linestyle=":",
+                    linestyle="dashdot",
                     label="Upper bound",
                 )
 
+        alpha_min, alpha_max = float('inf'), -float('inf')
+        prior_strength_min, prior_strength_max = float('inf'), -float('inf')
+        batch_size_min, batch_size_max = float('inf'), -float('inf')
+        for ((algo, *param), argmax_joint, batch_size), sweep in sweeps.items():
+            if algo == "GMTL":
+                alpha, = param
+                alpha_min = min(alpha_min, alpha)
+                alpha_max = max(alpha_max, alpha)
+            elif algo == "EM":
+                prior_strength, _, _ = param
+                prior_strength_min = min(prior_strength_min, prior_strength)
+                prior_strength_max = max(prior_strength_max, prior_strength)
+                batch_size_min = min(batch_size_min, batch_size)
+                batch_size_max = max(batch_size_max, batch_size)
+
+        baseline_curves_labels = [], []
+        gmtl_curves_labels = [], []
+        em_curves_labels = [], []
+        tab20c = plt.get_cmap("tab20c")
         for ((algo, *param), argmax_joint, batch_size), sweep in sweeps.items():
             del argmax_joint
             if algo == "Null":
-                linestyle = "dashed"
+                markerfacecolor = color = tab20c.colors[19]
+                linestyle = "dotted"
+                scaler = 2
                 label = "[Null]"
+                curves, labels = baseline_curves_labels
             elif algo == "Oracle":
-                linestyle = "dashdot"
+                markerfacecolor = color = tab20c.colors[16]
+                linestyle = "dotted"
+                scaler = 2
                 label = "[Oracle]"
+                curves, labels = baseline_curves_labels
             elif algo == "GMTL":
                 alpha, = param
+
+                color_min = np.array(tab20c.colors[3])
+                color_max = np.array(tab20c.colors[0])
+                multiplier = (alpha - alpha_min)/(alpha_max - alpha_min)
+                markerfacecolor = color = color_min + multiplier * (color_max - color_min)
                 linestyle = "dashed"
+                scaler = 1
                 label = f"[GMTL] {alpha = }"
+                curves, labels = gmtl_curves_labels
             elif algo == "EM":
-                prior_strength, symmetric_dirichlet, fix_marginal = param
+                prior_str, symmetric_dirichlet, fix_marginal = param
                 del symmetric_dirichlet, fix_marginal
+
+                color_min = np.array(tab20c.colors[4])
+                color_max = np.array(tab20c.colors[7])
+                multiplier = (prior_str - prior_strength_min)/(prior_strength_max - prior_strength_min)
+                color = color_min + multiplier * (color_max - color_min)
+
+                markerfacecolor_min = np.array(tab20c.colors[7])
+                markerfacecolor_max = np.array(tab20c.colors[4])
+                multiplier = (batch_size - batch_size_min)/(batch_size_max - batch_size_min)
+                markerfacecolor = markerfacecolor_min + multiplier * (markerfacecolor_max - markerfacecolor_min)
+
                 linestyle = "solid"
-                label = f"[EM] {prior_strength = }, {batch_size = }"
+                scaler = 1
+                label = f"[EM] {prior_str = }, {batch_size = }"
+                curves, labels = em_curves_labels
             else:
                 raise ValueError(f"Unknown adaptation algorithm {algo}")
 
-            ax.plot(confounder_strength, sweep[:-1], marker=".", linestyle=linestyle,
-                    linewidth=2, markersize=12, label=label)
+            curve, = ax.plot(confounder_strength, sweep[:-1], color=color,
+                    marker=".", markerfacecolor=markerfacecolor, linestyle=linestyle,
+                    linewidth=2*scaler, markersize=8*scaler)
+            curves.append(curve)
+            labels.append(label)
 
         for i in train_domains_set:
             ax.axvline(confounder_strength[i], linestyle="dotted")
@@ -128,7 +176,11 @@ def plot(
         plt.ylabel(ylabel)
         plt.title(plot_title)
         plt.grid(True)
-        plt.legend(loc="lower center", bbox_to_anchor=(0.5, -0.35), ncol=2, frameon=False)
+        legend1 = plt.legend(*baseline_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
+        legend2 = plt.legend(*gmtl_curves_labels, loc="upper left", bbox_to_anchor=(0.18, -0.15), ncol=1, frameon=False)
+        plt.legend(*em_curves_labels, loc="upper left", bbox_to_anchor=(0.5, -0.15), ncol=1, frameon=False)
+        plt.gca().add_artist(legend1)
+        plt.gca().add_artist(legend2)
 
         format_axes(ax)
         for suffix in ("png", "pdf"):
