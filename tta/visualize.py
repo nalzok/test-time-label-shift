@@ -152,8 +152,11 @@ def plot(
 
                 markerfacecolor_min = np.array(tab20c.colors[7])
                 markerfacecolor_max = np.array(tab20c.colors[4])
-                multiplier = (batch_size - batch_size_min)/(batch_size_max - batch_size_min)
-                markerfacecolor = markerfacecolor_min + multiplier * (markerfacecolor_max - markerfacecolor_min)
+                if batch_size_max == batch_size_min:
+                    markerfacecolor = color
+                else:
+                    multiplier = (batch_size - batch_size_min)/(batch_size_max - batch_size_min)
+                    markerfacecolor = markerfacecolor_min + multiplier * (markerfacecolor_max - markerfacecolor_min)
 
                 linestyle = "solid"
                 scaler = 1
