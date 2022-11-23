@@ -8,7 +8,31 @@ from tta.datasets import MultipleDomainDataset
 
 class MultipleDomainCXR(MultipleDomainDataset):
 
-    def build(self, generator, datastore, labels, Y_col, Z_col, patient_col, anchor1, anchor2, target_domain_count):
+    def build(self, generator, datastore, labels, Y_col, Z_col, patient_col, target_domain_count):
+        # Pathology:    0 = Negative, 1 = Positive
+        # GENDER:       0 = Female, 1 = Male
+        labels["M"] = 2 * labels[Y_col] + labels[Z_col]
+        print(f"histogram({Y_col}, {Z_col}) =", labels["M"].value_counts().sort_index().values)
+
+        marginal_Y = labels[Y_col].value_counts(normalize=True).sort_index().values
+        marginal_Z = labels[Z_col].value_counts(normalize=True).sort_index().values
+        print("marginal_Y", marginal_Y)
+        print("marginal_Z", marginal_Z)
+
+        # joint distribution of Y and Z
+        p_11_min = max(0, marginal_Y[1] + marginal_Z[1] - 1)
+        p_11_max = min(marginal_Y[1], marginal_Z[1])
+        anchor1 = np.array([
+            [1 - marginal_Y[1] - marginal_Z[1] + p_11_min,  marginal_Z[1]-p_11_min  ],
+            [marginal_Y[1] - p_11_min,                      p_11_min                ]
+        ])
+        anchor2 = np.array([
+            [1 - marginal_Y[1] - marginal_Z[1] + p_11_max,  marginal_Z[1]-p_11_max  ],
+            [marginal_Y[1] - p_11_max,                      p_11_max                ]
+        ])
+        print("anchor1", anchor1)
+        print("anchor2", anchor2)
+
         mask = np.ones(len(labels.index), dtype=bool)
         domains = [None for _ in self.confounder_strength]
 
@@ -19,8 +43,8 @@ class MultipleDomainCXR(MultipleDomainDataset):
 
             quota = labels["M"].loc[mask].value_counts().sort_index().values - target_domain_count
             quota = torch.from_numpy(quota)
-            joint_M = torch.from_numpy(strength * anchor1 + (1-strength) * anchor2)
-            joint_M_flatten = joint_M.flatten()
+            joint_M = strength * anchor1 + (1-strength) * anchor2
+            joint_M_flatten = torch.from_numpy(joint_M).flatten()
             count = torch.round(torch.min(quota/joint_M_flatten)*joint_M_flatten).long()
             count = count.reshape((2, 2))
             joint_M = count / torch.sum(count)
@@ -40,8 +64,8 @@ class MultipleDomainCXR(MultipleDomainDataset):
             if i == self.train_domain:
                 continue
 
-            joint_M = torch.from_numpy(strength * anchor1 + (1-strength) * anchor2)
-            joint_M_flatten = joint_M.flatten()
+            joint_M = strength * anchor1 + (1-strength) * anchor2
+            joint_M_flatten = torch.from_numpy(joint_M).flatten()
             count = torch.round(target_domain_count * joint_M_flatten).long()
 
             l1, l2, l3 = torch.topk(count, 3).indices

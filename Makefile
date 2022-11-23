@@ -134,7 +134,7 @@ sweep-chexpert:
 		--joblog joblog.txt \
 		pipenv run python3 \
 		-m tta.cli \
-		--config_name chexpert_{1}_{2}_domain{3}_train{4}_cali{5} \
+		--config_name chexpert_{1}_{2}_domain{3}_train{4}_cali{5}_prior{6} \
 		--dataset_name CheXpert \
 		--dataset_Y_column {1} \
 		--dataset_Z_column {2} \
@@ -151,24 +151,25 @@ sweep-chexpert:
 		--calibration_batch_size 64 \
 		--calibration_epochs {5} \
 		--calibration_lr 1e-3 \
-		--adapt_gmtl_alpha -1 \
 		--adapt_gmtl_alpha 0.5 \
+		--adapt_gmtl_alpha 1 \
 		--adapt_gmtl_alpha 2 \
-		--adapt_prior_strength 0 \
-		--adapt_prior_strength 1 \
-		--adapt_prior_strength 5 \
+		--adapt_prior_strength {6} \
 		--adapt_symmetric_dirichlet False \
 		--adapt_fix_marginal False \
 		--test_argmax_joint False \
+		--test_batch_size 64 \
 		--test_batch_size 512 \
 		--seed 2022 \
 		--num_workers 48 \
+		--plot_title CheXpert \
 		--plot_only True \
-		::: PNEUMONIA EFFUSION \
+		::: EFFUSION \
 		::: GENDER \
-		::: 1 2 4 10 16 18 19 \
-		::: 100 250 \
-		::: 20 50
+		::: 2 10 \
+		::: 500 \
+		::: 50 \
+		::: 0 1
 
 sweep:
 	parallel \

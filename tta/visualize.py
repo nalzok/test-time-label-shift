@@ -98,7 +98,7 @@ def plot(
                 )
 
         alpha_min, alpha_max = float('inf'), -float('inf')
-        prior_strength_min, prior_strength_max = float('inf'), -float('inf')
+        prior_str_min, prior_str_max = float('inf'), -float('inf')
         batch_size_min, batch_size_max = float('inf'), -float('inf')
         for ((algo, *param), argmax_joint, batch_size), sweep in sweeps.items():
             if algo == "GMTL":
@@ -106,9 +106,9 @@ def plot(
                 alpha_min = min(alpha_min, alpha)
                 alpha_max = max(alpha_max, alpha)
             elif algo == "EM":
-                prior_strength, _, _ = param
-                prior_strength_min = min(prior_strength_min, prior_strength)
-                prior_strength_max = max(prior_strength_max, prior_strength)
+                prior_str, _, _ = param
+                prior_str_min = min(prior_str_min, prior_str)
+                prior_str_max = max(prior_str_max, prior_str)
                 batch_size_min = min(batch_size_min, batch_size)
                 batch_size_max = max(batch_size_max, batch_size)
 
@@ -135,8 +135,12 @@ def plot(
 
                 color_min = np.array(tab20c.colors[3])
                 color_max = np.array(tab20c.colors[0])
-                multiplier = (alpha - alpha_min)/(alpha_max - alpha_min)
-                markerfacecolor = color = color_min + multiplier * (color_max - color_min)
+                if alpha_max == alpha_min:
+                    markerfacecolor = color = color_max
+                else:
+                    multiplier = (alpha - alpha_min)/(alpha_max - alpha_min)
+                    markerfacecolor = color = color_min + multiplier * (color_max - color_min)
+
                 linestyle = "dashed"
                 scaler = 1
                 label = f"[GMTL] {alpha = }"
@@ -145,17 +149,20 @@ def plot(
                 prior_str, symmetric_dirichlet, fix_marginal = param
                 del symmetric_dirichlet, fix_marginal
 
-                color_min = np.array(tab20c.colors[4])
-                color_max = np.array(tab20c.colors[7])
-                multiplier = (prior_str - prior_strength_min)/(prior_strength_max - prior_strength_min)
-                color = color_min + multiplier * (color_max - color_min)
-
-                markerfacecolor_min = np.array(tab20c.colors[7])
-                markerfacecolor_max = np.array(tab20c.colors[4])
+                color_min = np.array(tab20c.colors[7])
+                color_max = np.array(tab20c.colors[4])
                 if batch_size_max == batch_size_min:
-                    markerfacecolor = color
+                    color = color_min
                 else:
                     multiplier = (batch_size - batch_size_min)/(batch_size_max - batch_size_min)
+                    color = color_min + multiplier * (color_max - color_min)
+
+                markerfacecolor_min = np.array(tab20c.colors[4])
+                markerfacecolor_max = np.array(tab20c.colors[7])
+                if prior_str_max == prior_str_min:
+                    markerfacecolor = color
+                else:
+                    multiplier = (prior_str - prior_str_min)/(prior_str_max - prior_str_min)
                     markerfacecolor = markerfacecolor_min + multiplier * (markerfacecolor_max - markerfacecolor_min)
 
                 linestyle = "solid"
@@ -172,7 +179,8 @@ def plot(
             labels.append(label)
 
         for i in train_domains_set:
-            ax.axvline(confounder_strength[i], linestyle="dotted")
+            ax.axvline(confounder_strength[i], color="black",
+                    linestyle="dotted", linewidth=3)
 
         plt.ylim((0, 1))
         plt.xlabel("Shift parameter")

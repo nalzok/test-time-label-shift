@@ -90,23 +90,7 @@ class MultipleDomainMIMIC(MultipleDomainCXR):
             labels = labels.loc[~labels[column].isna()]
             labels[column] = labels[column].cat.codes
 
-        # Pathology:    0 = Negative, 1 = Positive
-        labels["M"] = 2 * labels[Y_col] + labels[Z_col]
-        print(f"histogram({Y_col}, {Z_col}) =", labels["M"].value_counts().sort_index().values)
-
-        # joint distribution of Y and Z
-        if Y_col == "Pleural Effusion" and Z_col == "Edema":
-            # hist(Pleural Effusion, Edema) = [12077  2436  5784 15440]
-            anchor1 = np.array([[0.4, 0.0], [0.0, 0.6]])
-            anchor2 = np.array([[0.0, 0.3], [0.7, 0.0]])
-        elif Y_col == "Pneumonia" and Z_col == "Edema":
-            # hist(Pneumonia, Edema) = [11242  1518  1450  3294]
-            anchor1 = np.array([[0.75, 0.0], [0.0, 0.25]])
-            anchor2 = np.array([[0.0, 0.5], [0.5, 0.0]])
-        else:
-            raise NotImplementedError(f"Please specify confounders for (Y, Z) = ({Y_col}, {Z_col})")
-
-        self.domains = self.build(generator, datastore, labels, Y_col, Z_col, patient_col, anchor1, anchor2, target_domain_count)
+        self.domains = self.build(generator, datastore, labels, Y_col, Z_col, patient_col, target_domain_count)
 
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         print(f'Saving cached datasets to {cache_file}')

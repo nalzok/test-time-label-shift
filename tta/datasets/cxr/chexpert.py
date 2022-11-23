@@ -99,32 +99,7 @@ class MultipleDomainCheXpert(MultipleDomainCXR):
             labels = labels.loc[~labels[column].isna()]
             labels[column] = labels[column].cat.codes
 
-        # Pathology:    0 = Negative, 1 = Positive
-        # GENDER:       0 = Female, 1 = Male
-        labels["M"] = 2 * labels[Y_col] + labels[Z_col]
-        print(f"histogram({Y_col}, {Z_col}) =", labels["M"].value_counts().sort_index().values)
-
-        # joint distribution of Y and Z
-        if Y_col == "PNEUMONIA" and Z_col == "GENDER":
-            # histogram(PNEUMONIA, GENDER) = [69209 98645  1939  2718]
-            anchor1 = np.array([[0.975, 0.0], [0.0, 0.025]])
-            anchor2 = np.array([[0.0, 0.975], [0.025, 0.0]])
-        elif Y_col == "EFFUSION" and Z_col == "GENDER":
-            # histogram(EFFUSION, GENDER) = [32053 46822 31900 44826]
-            anchor1 = np.array([[0.5, 0.0], [0.0, 0.5]])
-            anchor2 = np.array([[0.0, 0.5], [0.5, 0.0]])
-        elif Y_col == "PNEUMONIA" and Z_col == "EFFUSION":
-            # histogram(PNEUMONIA, EFFUSION) = [66799 69011  2702  1395]
-            anchor1 = np.array([[0.975, 0.0], [0.0, 0.025]])
-            anchor2 = np.array([[0.0, 0.975], [0.025, 0.0]])
-        elif Y_col == "GENDER" and Z_col == "EFFUSION":
-            # histogram(GENDER, EFFUSION) = [32053 31900 46822 44826]
-            anchor1 = np.array([[0.5, 0.0], [0.0, 0.5]])
-            anchor2 = np.array([[0.0, 0.5], [0.5, 0.0]])
-        else:
-            raise NotImplementedError(f"Please specify confounders for (Y, Z) = ({Y_col}, {Z_col})")
-
-        self.domains = self.build(generator, datastore, labels, Y_col, Z_col, patient_col, anchor1, anchor2, target_domain_count)
+        self.domains = self.build(generator, datastore, labels, Y_col, Z_col, patient_col, target_domain_count)
 
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         print(f'Saving cached datasets to {cache_file}')

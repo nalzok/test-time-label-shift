@@ -74,11 +74,11 @@ from tta.visualize import latexify, plot
 @click.option("--adapt_fix_marginal", type=bool, required=False, multiple=True)
 @click.option("--test_argmax_joint", type=bool, required=True, multiple=True)
 @click.option("--test_batch_size", type=int, required=True, multiple=True)
+@click.option("--seed", type=int, required=True)
+@click.option("--num_workers", type=int, required=True)
 @click.option(
     "--plot_title", type=str, required=False, default="Performance on Each Domain"
 )
-@click.option("--seed", type=int, required=True)
-@click.option("--num_workers", type=int, required=True)
 @click.option("--plot_only", type=bool, required=True)
 def cli(
     config_name: str,
@@ -108,9 +108,9 @@ def cli(
     adapt_fix_marginal: Sequence[bool],
     test_argmax_joint: Sequence[bool],
     test_batch_size: Sequence[int],
-    plot_title: str,
     seed: int,
     num_workers: int,
+    plot_title: str,
     plot_only: bool,
 ) -> None:
     log_root = Path("logs/")
