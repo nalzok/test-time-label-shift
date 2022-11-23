@@ -34,7 +34,7 @@ sweep-mnist:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert \
-		--plot_only True \
+		--plot_only False \
 		::: False \
 		::: 0.1 \
 		::: 2 10 \
@@ -78,7 +78,7 @@ sweep-chexpert:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert \
-		--plot_only True \
+		--plot_only False \
 		::: EFFUSION \
 		::: GENDER \
 		::: 2 10 \
@@ -123,7 +123,7 @@ sweep-chexpert-resnet:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert \
-		--plot_only True \
+		--plot_only False \
 		::: EFFUSION \
 		::: GENDER \
 		::: 2 10 \
