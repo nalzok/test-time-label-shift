@@ -289,7 +289,7 @@ tags
 data/**
 pretrained/**
 jit_cache/**
-joblog.txt
+joblog*.txt
 logs/**.txt
 plots/**.png
 plots/**.pdf
