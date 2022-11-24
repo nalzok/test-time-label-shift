@@ -124,6 +124,12 @@ def plot(
                 scaler = 2
                 label = "[Null]"
                 curves, labels = baseline_curves_labels
+            elif algo == "Null-unconfounded":
+                markerfacecolor = color = tab20c.colors[8]
+                linestyle = "dotted"
+                scaler = 2
+                label = "[Null (Unconfounded)]"
+                curves, labels = baseline_curves_labels
             elif algo == "Oracle":
                 markerfacecolor = color = tab20c.colors[16]
                 linestyle = "dotted"
