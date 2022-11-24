@@ -4,6 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+from sklearn.model_selection import train_test_split
 from cxr_foundation import constants, train_lib
 
 
@@ -41,11 +42,10 @@ df = labels_df
 
 df = df[~df["SEX"].isna()]
 model = train_lib.create_model(["SEX"], hidden_layer_sizes=[])
-training_df = df[df["split"] == "train"]
+training_df, tune_df = train_test_split(df, test_size=0.2)
 training_labels = dict(zip(training_df["image_id"], training_df["SEX"].astype(int)))
 filenames = glob.glob(os.path.join("./data/inputs/chexpert/*/", "*.tfrecord"))
 training_data = train_lib.get_dataset(filenames, labels=training_labels)
-tune_df = df[df["split"] == "valid"]
 tune_labels = dict(zip(tune_df["image_id"], tune_df["SEX"].astype(int)))
 tune_data = train_lib.get_dataset(filenames, labels=tune_labels).batch(1).cache()
 model.fit(

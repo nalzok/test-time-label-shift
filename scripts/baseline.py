@@ -3,7 +3,7 @@ from functools import partial
 import numpy as np
 import jax
 import jax.numpy as jnp
-from flax.jax_utils import replicate, unreplicate
+from flax.jax_utils import replicate
 import flax.linen as nn
 import optax
 from sklearn.model_selection import train_test_split
@@ -83,8 +83,6 @@ def baseline(data_matrix, column):
     X, Y = load_data(data_matrix, column)
 
     X, X_test, Y, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
-    print("Train", X.shape, Y.shape)
-    print("Test", X_test.shape, Y_test.shape)
 
     X = jnp.array(X[X.shape[0] % device_count :]).reshape(
         device_count, -1, *X.shape[1:]
@@ -108,35 +106,18 @@ def baseline(data_matrix, column):
     tx = optax.sgd(learning_rate=learning_rate)
     opt_state = tx.init(params)
 
-    train_loss = train_accuracy = train_auc = np.nan
     params = replicate(params)
     opt_state = replicate(opt_state)
     for _ in range(1001):
-        params, opt_state, train_loss, train_score = train_step(
-            params, opt_state, model, tx, X, Y
-        )
-        train_loss = unreplicate(train_loss)
-        train_accuracy = jnp.mean((train_score > 0.5) == Y)
-        train_auc = roc_auc_score(Y.reshape(-1), train_score.reshape(-1))
+        params, opt_state, _, _ = train_step(params, opt_state, model, tx, X, Y)
 
-    print(
-        f"[Train] Loss: {train_loss:.4f}, Accuracy: {train_accuracy:.4f} ({jnp.mean(Y):.4f}), AUC: {train_auc:.4f}"
-    )
-
-    test_loss, test_score = test_step(params, model, X_test, Y_test)
-    test_loss = unreplicate(test_loss)
-    test_accuracy = jnp.mean((test_score > 0.5) == Y_test)
+    _, test_score = test_step(params, model, X_test, Y_test)
     test_auc = roc_auc_score(Y_test.reshape(-1), test_score.reshape(-1))
-    print(
-        f"[Test] Loss: {test_loss:.4f}, Accuracy: {test_accuracy:.4f} ({jnp.mean(Y_test):.4f}), AUC: {test_auc:.4f}"
-    )
+    print(rf"{column.replace('_', chr(92)+'_')} & {test_auc:.3f} \\")
 
 
 if __name__ == "__main__":
     data_matrix = np.load("data/CheXpert/data_matrix.npz", allow_pickle=True)
     columns = data_matrix["columns"]
     for column in columns:
-        if column == "split":
-            continue
-        print(f"===> {column}")
         baseline(data_matrix, column)
