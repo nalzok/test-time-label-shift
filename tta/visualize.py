@@ -128,7 +128,7 @@ def plot(
                 markerfacecolor = color = tab20c.colors[8]
                 linestyle = "dotted"
                 scaler = 2
-                label = "[Null (Unconfounded)]"
+                label = "[Null (Unconf)]"
                 curves, labels = baseline_curves_labels
             elif algo == "Oracle":
                 markerfacecolor = color = tab20c.colors[16]
@@ -188,16 +188,17 @@ def plot(
             ax.axvline(confounder_strength[i], color="black",
                     linestyle="dotted", linewidth=3)
 
-        plt.ylim((0, 1))
+        plt.ylim((0.5, 1))
         plt.xlabel("Shift parameter")
         plt.ylabel(ylabel)
         plt.title(plot_title)
         plt.grid(True)
         legend1 = plt.legend(*baseline_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
-        legend2 = plt.legend(*gmtl_curves_labels, loc="upper left", bbox_to_anchor=(0.18, -0.15), ncol=1, frameon=False)
-        plt.legend(*em_curves_labels, loc="upper left", bbox_to_anchor=(0.5, -0.15), ncol=1, frameon=False)
+        legend2 = plt.legend(*gmtl_curves_labels, loc="upper left", bbox_to_anchor=(0.275, -0.15), ncol=1, frameon=False)
+        plt.legend(*em_curves_labels, loc="upper left", bbox_to_anchor=(0.6, -0.15), ncol=1, frameon=False)
         plt.gca().add_artist(legend1)
         plt.gca().add_artist(legend2)
+        fig.tight_layout()
 
         format_axes(ax)
         for suffix in ("png", "pdf"):

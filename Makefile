@@ -34,13 +34,16 @@ paper-mnist:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title MNIST \
-		--plot_only False \
+		--plot_only True \
 		::: False \
 		::: 0.1 \
 		::: 2 10 \
 		::: 500 \
 		::: 100 \
 		::: 1
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
+		--target npz/mnist_rotFalse_noise0.1_domain2_train500_cali100_prior1.npz
 
 paper-chexpert-embedding:
 	parallel \
@@ -78,13 +81,16 @@ paper-chexpert-embedding:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert-embedding \
-		--plot_only False \
+		--plot_only True \
 		::: EFFUSION \
 		::: GENDER \
 		::: 2 10 \
 		::: 500 \
 		::: 100 \
 		::: 1
+	pipenv run python3 -m scripts.superpose \
+		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_train500_cali100_prior1.npz \
+		--target npz/chexpert-embedding_EFFUSION_GENDER_domain2_train500_cali100_prior1.npz
 
 paper-chexpert-pixel:
 	parallel \
@@ -123,13 +129,16 @@ paper-chexpert-pixel:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert-pixel \
-		--plot_only False \
+		--plot_only True \
 		::: EFFUSION \
 		::: GENDER \
 		::: 2 10 \
 		::: 100 \
 		::: 20 \
 		::: 1
+	pipenv run python3 -m scripts.superpose \
+		--source npz/chexpert-pixel_EFFUSION_GENDER_domain10_train500_cali100_prior1.npz \
+		--target npz/chexpert-pixel_EFFUSION_GENDER_domain2_train500_cali100_prior1.npz
 
 data/CheXpert/data_matrix.npz:
 	pipenv run python3 -m scripts.matching
