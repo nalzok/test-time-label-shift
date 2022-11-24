@@ -33,7 +33,7 @@ paper-mnist:
 		--test_batch_size 512 \
 		--seed 2022 \
 		--num_workers 48 \
-		--plot_title MNIST \
+		--plot_title ColoredMNIST \
 		--plot_only True \
 		::: False \
 		::: 0.1 \
