@@ -82,7 +82,7 @@ def baseline(data_matrix, column):
     device_count = jax.local_device_count()
     X, Y = load_data(data_matrix, column)
 
-    X, X_test, Y, Y_test = train_test_split(X, Y, test_size=1e-3, random_state=42)
+    X, X_test, Y, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
     print("Train", X.shape, Y.shape)
     print("Test", X_test.shape, Y_test.shape)
 

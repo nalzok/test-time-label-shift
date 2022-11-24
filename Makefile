@@ -1,10 +1,10 @@
-.PHONY: debug sweep mnist
+.PHONY: paper-mnist paper-chexpert-embedding paper-chexpert-pixel baseline manova tree
 
-sweep-mnist:
+paper-mnist:
 	parallel \
 		--eta \
 		--jobs 1 \
-		--joblog joblog.txt \
+		--joblog joblog-$@.txt \
 		pipenv run python3 \
 		-m tta.cli \
 		--config_name mnist_rot{1}_noise{2}_domain{3}_train{4}_cali{5}_prior{6} \
@@ -33,23 +33,23 @@ sweep-mnist:
 		--test_batch_size 512 \
 		--seed 2022 \
 		--num_workers 48 \
-		--plot_title CheXpert \
+		--plot_title MNIST \
 		--plot_only False \
 		::: False \
 		::: 0.1 \
 		::: 2 10 \
 		::: 500 \
-		::: 50 \
-		::: 0 1
+		::: 100 \
+		::: 1
 
-sweep-chexpert:
+paper-chexpert-embedding:
 	parallel \
 		--eta \
 		--jobs 1 \
-		--joblog joblog.txt \
+		--joblog joblog-$@.txt \
 		pipenv run python3 \
 		-m tta.cli \
-		--config_name chexpert_{1}_{2}_domain{3}_train{4}_cali{5}_prior{6} \
+		--config_name chexpert-embedding_{1}_{2}_domain{3}_train{4}_cali{5}_prior{6} \
 		--dataset_name CheXpert \
 		--dataset_Y_column {1} \
 		--dataset_Z_column {2} \
@@ -77,23 +77,23 @@ sweep-chexpert:
 		--test_batch_size 512 \
 		--seed 2022 \
 		--num_workers 48 \
-		--plot_title CheXpert \
+		--plot_title CheXpert-embedding \
 		--plot_only False \
 		::: EFFUSION \
 		::: GENDER \
 		::: 2 10 \
 		::: 500 \
-		::: 50 \
-		::: 0 1
+		::: 100 \
+		::: 1
 
-sweep-chexpert-resnet:
+paper-chexpert-pixel:
 	parallel \
 		--eta \
 		--jobs 1 \
 		--joblog joblog-$@.txt \
 		pipenv run python3 \
 		-m tta.cli \
-		--config_name rawChexpert_{1}_{2}_domain{3}_train{4}_cali{5}_prior{6} \
+		--config_name chexpert-pixel_{1}_{2}_domain{3}_train{4}_cali{5}_prior{6} \
 		--dataset_name CheXpert \
 		--dataset_Y_column {1} \
 		--dataset_Z_column {2} \
@@ -122,16 +122,19 @@ sweep-chexpert-resnet:
 		--test_batch_size 512 \
 		--seed 2022 \
 		--num_workers 48 \
-		--plot_title CheXpert \
+		--plot_title CheXpert-pixel \
 		--plot_only False \
 		::: EFFUSION \
 		::: GENDER \
 		::: 2 10 \
-		::: 500 \
-		::: 50 \
-		::: 0 1
+		::: 100 \
+		::: 20 \
+		::: 1
 
-baseline:
+data/CheXpert/data_matrix.npz:
+	pipenv run python3 -m scripts.matching
+
+baseline: data/CheXpert/data_matrix.npz
 	pipenv run python3 -m scripts.baseline
 
 manova:
