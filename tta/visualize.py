@@ -119,20 +119,23 @@ def plot(
         for ((algo, *param), argmax_joint, batch_size), sweep in sweeps.items():
             del argmax_joint
             if algo == "Null":
-                markerfacecolor = color = tab20c.colors[19]
                 linestyle = "dotted"
+                marker = "."
+                markerfacecolor = color = tab20c.colors[19]
                 scaler = 2
-                label = "[Null]"
+                label = "[Unadapted]"
                 curves, labels = baseline_curves_labels
             elif algo == "Null-unconfounded":
-                markerfacecolor = color = tab20c.colors[8]
                 linestyle = "dotted"
+                marker = "."
+                markerfacecolor = color = tab20c.colors[8]
                 scaler = 2
-                label = "[Null (Unconf)]"
+                label = "[Invariant]"
                 curves, labels = baseline_curves_labels
             elif algo == "Oracle":
-                markerfacecolor = color = tab20c.colors[16]
                 linestyle = "dotted"
+                marker = "."
+                markerfacecolor = color = tab20c.colors[16]
                 scaler = 2
                 label = "[Oracle]"
                 curves, labels = baseline_curves_labels
@@ -148,6 +151,7 @@ def plot(
                     markerfacecolor = color = color_min + multiplier * (color_max - color_min)
 
                 linestyle = "dashed"
+                marker = "s"
                 scaler = 1
                 label = f"[GMTL] {alpha = }"
                 curves, labels = gmtl_curves_labels
@@ -172,15 +176,15 @@ def plot(
                     markerfacecolor = markerfacecolor_min + multiplier * (markerfacecolor_max - markerfacecolor_min)
 
                 linestyle = "solid"
+                marker = "*"
                 scaler = 1
-                label = f"[EM] {prior_str = }, {batch_size = }"
+                label = f"[EM] N = {batch_size}"
                 curves, labels = em_curves_labels
             else:
                 raise ValueError(f"Unknown adaptation algorithm {algo}")
 
-            curve, = ax.plot(confounder_strength, sweep[:-1], color=color,
-                    marker=".", markerfacecolor=markerfacecolor, linestyle=linestyle,
-                    linewidth=2*scaler, markersize=8*scaler)
+            curve, = ax.plot(confounder_strength, sweep[:-1], linestyle=linestyle, marker=marker,
+                    color=color, markerfacecolor=markerfacecolor, linewidth=2*scaler, markersize=8*scaler)
             curves.append(curve)
             labels.append(label)
 

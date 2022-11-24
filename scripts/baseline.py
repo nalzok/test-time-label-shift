@@ -61,7 +61,7 @@ def train_step(params, opt_state, model, tx, X, Y):
         return loss, score
 
     (loss, score), grads = loss_grad_fn(params, X, Y)
-    updates, opt_state = tx.update(grads, opt_state)
+    updates, opt_state = tx.update(grads, opt_state, params)
     params = optax.apply_updates(params, updates)
 
     return params, opt_state, loss, score
@@ -103,7 +103,7 @@ def baseline(data_matrix, column):
     params = model.init(key, dummy)
 
     learning_rate = 1e-3
-    tx = optax.sgd(learning_rate=learning_rate)
+    tx = optax.adam(learning_rate=learning_rate)
     opt_state = tx.init(params)
 
     params = replicate(params)

@@ -1,5 +1,7 @@
 .PHONY: paper-mnist paper-chexpert-embedding paper-chexpert-pixel baseline manova tree
 
+paper: paper-mnist paper-chexpert-embedding paper-chexpert-pixel
+
 paper-mnist:
 	parallel \
 		--eta \
