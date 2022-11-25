@@ -3,7 +3,7 @@ from functools import partial
 import numpy as np
 import jax
 import jax.numpy as jnp
-from flax.jax_utils import replicate
+from flax.jax_utils import replicate, unreplicate
 import flax.linen as nn
 import optax
 from sklearn.model_selection import train_test_split
@@ -108,12 +108,13 @@ def baseline(data_matrix, column):
 
     params = replicate(params)
     opt_state = replicate(opt_state)
+    loss = float("inf")
     for _ in range(1001):
-        params, opt_state, _, _ = train_step(params, opt_state, model, tx, X, Y)
+        params, opt_state, loss, _ = train_step(params, opt_state, model, tx, X, Y)
 
-    _, test_score = test_step(params, model, X_test, Y_test)
-    auc = roc_auc_score(Y_test.reshape(-1), test_score.reshape(-1))
-    print(rf"{column.replace('_', chr(92)+'_')} & {auc:.3f} & {np.mean(Y_test):.3f} \\")
+    _, score = test_step(params, model, X_test, Y_test)
+    auc = roc_auc_score(Y_test.reshape(-1), score.reshape(-1))
+    print(rf"{column.replace('_', chr(92)+'_')} & {auc:.3f} & {np.mean(Y_test):.3f} & {unreplicate(loss):.3f} \\")
 
 
 if __name__ == "__main__":

@@ -4,30 +4,40 @@ import numpy as np
 import torch
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import roc_auc_score
+import matplotlib.pyplot as plt
 
-from tta.datasets.mnist import MultipleDomainMNIST
+from tta.datasets.cxr.chexpert import MultipleDomainCheXpert
 from tta.datasets import split
+from tta.visualize import latexify, format_axes
 
 
 def main():
     seed = 42
     generator = torch.Generator().manual_seed(seed)
-    dataset_apply_rotation = False
-    dataset_label_noise = 0.2
-    train_domains_set = {9}
-    train_fraction = 0.8
+
+    dataset_y_column = "EFFUSION"
+    dataset_z_column = "GENDER"
+    dataset_target_domain_count = 512
+    dataset_source_domain_count = 85267
+    dataset_use_embedding = True
+    train_domains_set = {10}
+
+    root = Path("data/CheXpert")
+    dataset = MultipleDomainCheXpert(
+        root,
+        train_domains_set,
+        generator,
+        dataset_y_column,
+        dataset_z_column,
+        dataset_use_embedding,
+        dataset_target_domain_count,
+        dataset_source_domain_count,
+    )
+
+    train_fraction = 0.9
     train_calibration_fraction = 0.1
     calibration_domains_set = set()
     calibration_fraction = 0.0
-
-    root = Path("data/mnist")
-    dataset = MultipleDomainMNIST(
-        root,
-        generator,
-        train_domains_set,
-        dataset_apply_rotation,
-        dataset_label_noise,
-    )
 
     train, calibration, test_splits = split(
         dataset,
@@ -53,9 +63,12 @@ def main():
     # TODO: do calibration with gradient descent or whatever
 
     # Testing
-    print(f"{dataset_label_noise = }")
+    auc_unadapted = []
+    auc_adapted = []
+    auc_oracle = []
     print("AUC")
-    for i, (_, test) in enumerate(test_splits):
+    for i, (target_oracle, test) in enumerate(test_splits):
+        target_oracle = target_oracle.numpy().flatten()
         X, Y, _, Z = dataset2np(test)
         M = Y * 2 + Z
         prob = clf.predict_proba(X)
@@ -66,20 +79,60 @@ def main():
             old = target
 
             # E step
-            target_prob = target * prob / source
-            normalizer = np.sum(target_prob, axis=-1, keepdims=True)
-            target_prob = target_prob / normalizer
+            prob_em = target * prob / source
+            normalizer = np.sum(prob_em, axis=-1, keepdims=True)
+            prob_em = prob_em / normalizer
 
             # M step
-            target_prob_count = np.sum(target_prob, axis=0)
-            target = target_prob_count / np.sum(target_prob_count)
+            prob_em_count = np.sum(prob_em, axis=0)
+            target = prob_em_count / np.sum(prob_em_count)
 
             if np.all(target == old):
                 break
 
+        prob_oracle = target_oracle * prob / source
+        normalizer = np.sum(prob_oracle, axis=-1, keepdims=True)
+        prob_oracle = prob_oracle / normalizer
+
         unadapted = evaluate(prob, Y)
-        adapted = evaluate(target_prob, Y)
-        print("*" if i in train_domains_set else " ", f"domain #{i:<2}, {unadapted = :.4f}", f"{adapted = :.4f}")
+        adapted = evaluate(prob_em, Y)
+        oracle = evaluate(prob_oracle, Y)
+
+        auc_unadapted.append(unadapted)
+        auc_adapted.append(adapted)
+        auc_oracle.append(oracle)
+        print("*" if i in train_domains_set else " ", f"domain #{i:<2}, {unadapted = :.4f}", f"{adapted = :.4f}", f"{oracle = :.4f}")
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    tab20c = plt.get_cmap("tab20c")
+
+    ax.plot(dataset.confounder_strength, auc_unadapted, label="Unadapted",
+            linestyle="dotted", marker=".", color=np.array(tab20c.colors[19]),
+            linewidth=4, markersize=16)
+    ax.plot(dataset.confounder_strength, auc_oracle, label="Oracle",
+            linestyle="dotted", marker=".", color=np.array(tab20c.colors[16]),
+            linewidth=4, markersize=16)
+    ax.plot(dataset.confounder_strength, auc_adapted, label="EM",
+            linestyle="solid", marker="s", color=np.array(tab20c.colors[4]),
+            linewidth=2, markersize=8)
+
+    for i in train_domains_set:
+        ax.axvline(dataset.confounder_strength[i], color="black",
+                linestyle="dotted", linewidth=3)
+
+    plt.ylim((0.7, 1))
+    plt.xlabel("Shift parameter")
+    plt.ylabel("AUC")
+    plt.title("XGBoost on ColoredMNIST")
+    plt.grid(True)
+    plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=3, frameon=False)
+    fig.tight_layout()
+
+    format_axes(ax)
+    for suffix in ("png", "pdf"):
+        plt.savefig(f"plots/tree_chexpert_{next(iter(train_domains_set))}.{suffix}", dpi=300)
+
+    plt.close(fig)
 
 
 def dataset2np(dataset):
@@ -108,4 +161,5 @@ def evaluate(prob_M, Y):
 
 
 if __name__ == "__main__":
+    latexify(width_scale_factor=2, fig_height=2)
     main()
