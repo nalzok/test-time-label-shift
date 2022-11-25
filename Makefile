@@ -139,8 +139,8 @@ paper-chexpert-pixel:
 		::: 20 \
 		::: 1
 	pipenv run python3 -m scripts.superpose \
-		--source npz/chexpert-pixel_EFFUSION_GENDER_domain10_train500_cali100_prior1.npz \
-		--target npz/chexpert-pixel_EFFUSION_GENDER_domain2_train500_cali100_prior1.npz
+		--source npz/chexpert-pixel_EFFUSION_GENDER_domain10_train100_cali20_prior1.npz \
+		--target npz/chexpert-pixel_EFFUSION_GENDER_domain2_train100_cali20_prior1.npz
 
 data/CheXpert/data_matrix.npz:
 	pipenv run python3 -m scripts.matching

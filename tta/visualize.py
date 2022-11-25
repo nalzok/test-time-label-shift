@@ -84,6 +84,7 @@ def plot(
     all_sweeps = np.load(npz_path, allow_pickle=True)
 
     for sweep_type, (sweeps, ylabel) in all_sweeps.items():
+        ylabel = ylabel.replace("Average AUC", "AUC")
         fig, ax = plt.subplots(figsize=(12, 6))
 
         if sweep_type == "accuracy":
@@ -151,7 +152,7 @@ def plot(
                     markerfacecolor = color = color_min + multiplier * (color_max - color_min)
 
                 linestyle = "dashed"
-                marker = "s"
+                marker = "^"
                 scaler = 1
                 label = f"[GMTL] {alpha = }"
                 curves, labels = gmtl_curves_labels
@@ -176,7 +177,7 @@ def plot(
                     markerfacecolor = markerfacecolor_min + multiplier * (markerfacecolor_max - markerfacecolor_min)
 
                 linestyle = "solid"
-                marker = "*"
+                marker = "s"
                 scaler = 1
                 label = f"[EM] N = {batch_size}"
                 curves, labels = em_curves_labels
@@ -192,21 +193,21 @@ def plot(
             ax.axvline(confounder_strength[i], color="black",
                     linestyle="dotted", linewidth=3)
 
-        plt.ylim((0.5, 1))
+        plt.ylim((0.7, 1))
         plt.xlabel("Shift parameter")
         plt.ylabel(ylabel)
         plt.title(plot_title)
         plt.grid(True)
         legend1 = plt.legend(*baseline_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
-        legend2 = plt.legend(*gmtl_curves_labels, loc="upper left", bbox_to_anchor=(0.275, -0.15), ncol=1, frameon=False)
-        plt.legend(*em_curves_labels, loc="upper left", bbox_to_anchor=(0.6, -0.15), ncol=1, frameon=False)
+        legend2 = plt.legend(*gmtl_curves_labels, loc="upper left", bbox_to_anchor=(1/3, -0.15), ncol=1, frameon=False)
+        plt.legend(*em_curves_labels, loc="upper left", bbox_to_anchor=(2/3, -0.15), ncol=1, frameon=False)
         plt.gca().add_artist(legend1)
         plt.gca().add_artist(legend2)
         fig.tight_layout()
 
         format_axes(ax)
         for suffix in ("png", "pdf"):
-            plt.savefig(plot_root / f"{config_name}_{sweep_type}.{suffix}", bbox_inches="tight", dpi=300)
+            plt.savefig(plot_root / f"{config_name}_{sweep_type}.{suffix}", dpi=300)
 
         plt.close(fig)
 

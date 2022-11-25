@@ -454,8 +454,8 @@ def main(
     all_sweeps = {
         "mean": (mean_sweeps, "Average probability of class 1"),
         "l1": (l1_sweeps, "Average L1 error of class 1"),
-        "auc": (auc_sweeps, "Average AUC"),
-        "auc_Z": (auc_Z_sweeps, "Average AUC (Z)"),
+        "auc": (auc_sweeps, "AUC"),
+        "auc_Z": (auc_Z_sweeps, "AUC (Z)"),
         "accuracy": (accuracy_sweeps, "Accuracy"),
         "accuracy_Z": (accuracy_Z_sweeps, "Accuracy (Z)"),
         "norm": (norm_sweeps, "Euclidean distance"),
