@@ -1,3 +1,4 @@
+from typing import Optional
 from hashlib import sha256
 
 import numpy as np
@@ -10,7 +11,8 @@ from tta.datasets.cxr import MultipleDomainCXR
 
 class MultipleDomainMIMIC(MultipleDomainCXR):
 
-    def __init__(self, root, train_domains, generator, Y_col: str, Z_col: str, use_embedding: bool, target_domain_count: int):
+    def __init__(self, root, train_domains, generator, Y_col: str, Z_col: str, use_embedding: bool,
+            target_domain_count: int, source_domain_count: Optional[int]):
         if len(train_domains) != 1:
             raise NotImplementedError(
                 "Training on multiple source distributions is not supported yet."
@@ -34,6 +36,7 @@ class MultipleDomainMIMIC(MultipleDomainCXR):
         m.update(Y_col.encode())
         m.update(Z_col.encode())
         m.update(str(target_domain_count).encode())
+        m.update(str(source_domain_count).encode())
 
         m.update(str(input_shape).encode())
         m.update(str(C).encode())
@@ -44,7 +47,7 @@ class MultipleDomainMIMIC(MultipleDomainCXR):
 
         super().__init__(input_shape, C, K, confounder_strength, train_domain, hexdigest)
 
-        cache_key = f'{train_domain}_{Y_col}_{Z_col}_{target_domain_count}_{hexdigest}'
+        cache_key = f'{train_domain}_{Y_col}_{Z_col}_{target_domain_count}_{source_domain_count}_{hexdigest}'
         cache_file = root / 'cached' / f'{cache_key}.pt'
         if cache_file.is_file():
             # NOTE: The torch.Generator state won't be the same if we load from cache
@@ -90,7 +93,7 @@ class MultipleDomainMIMIC(MultipleDomainCXR):
             labels = labels.loc[~labels[column].isna()]
             labels[column] = labels[column].cat.codes
 
-        self.domains = self.build(generator, datastore, labels, Y_col, Z_col, patient_col, target_domain_count)
+        self.domains = self.build(generator, datastore, labels, Y_col, Z_col, patient_col, target_domain_count, source_domain_count)
 
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         print(f'Saving cached datasets to {cache_file}')

@@ -49,6 +49,8 @@ from tta.visualize import latexify, plot
 )
 @click.option("--dataset_Y_column", type=str, required=False)
 @click.option("--dataset_Z_column", type=str, required=False)
+@click.option("--dataset_target_domain_count", type=int, required=False)
+@click.option("--dataset_source_domain_count", type=int, required=False)
 @click.option("--dataset_use_embedding", type=bool, required=False)
 @click.option("--dataset_apply_rotation", type=bool, required=False)
 @click.option("--dataset_label_noise", type=float, required=True)
@@ -85,6 +87,8 @@ def cli(
     dataset_name: str,
     dataset_y_column: Optional[str],
     dataset_z_column: Optional[str],
+    dataset_target_domain_count: Optional[int],
+    dataset_source_domain_count: Optional[int],
     dataset_use_embedding: Optional[bool],
     dataset_apply_rotation: Optional[bool],
     dataset_label_noise: float,
@@ -142,6 +146,8 @@ def cli(
         dataset_name,
         dataset_y_column,
         dataset_z_column,
+        dataset_target_domain_count,
+        dataset_source_domain_count,
         dataset_use_embedding,
         dataset_apply_rotation,
         dataset_label_noise,
@@ -198,6 +204,8 @@ def prepare_dataset(
     dataset_name: str,
     dataset_y_column: Optional[str],
     dataset_z_column: Optional[str],
+    dataset_target_domain_count: Optional[int],
+    dataset_source_domain_count: Optional[int],
     dataset_use_embedding: Optional[bool],
     dataset_apply_rotation: Optional[bool],
     dataset_label_noise: float,
@@ -233,6 +241,8 @@ def prepare_dataset(
     if dataset_name == "MNIST":
         assert dataset_y_column is None
         assert dataset_z_column is None
+        assert dataset_target_domain_count is None
+        assert dataset_source_domain_count is None
         assert dataset_use_embedding is None
         assert dataset_apply_rotation is not None
 
@@ -247,6 +257,8 @@ def prepare_dataset(
     elif dataset_name == "COCO":
         assert dataset_y_column is None
         assert dataset_z_column is None
+        assert dataset_target_domain_count is None
+        assert dataset_source_domain_count is None
         assert dataset_use_embedding is None
         assert dataset_apply_rotation is None
         assert dataset_label_noise == 0
@@ -257,6 +269,8 @@ def prepare_dataset(
     elif dataset_name == "Waterbirds":
         assert dataset_y_column is None
         assert dataset_z_column is None
+        assert dataset_target_domain_count is None
+        assert dataset_source_domain_count is None
         assert dataset_use_embedding is None
         assert dataset_apply_rotation is None
         assert dataset_label_noise == 0
@@ -266,12 +280,12 @@ def prepare_dataset(
     elif dataset_name == "CheXpert":
         assert dataset_y_column is not None
         assert dataset_z_column is not None
+        assert dataset_target_domain_count is not None
         assert dataset_use_embedding is not None
         assert dataset_apply_rotation is None
         assert dataset_label_noise == 0
 
         root = Path("data/CheXpert")
-        target_domain_count = 512
         dataset = MultipleDomainCheXpert(
             root,
             train_domains_set,
@@ -279,17 +293,18 @@ def prepare_dataset(
             dataset_y_column,
             dataset_z_column,
             dataset_use_embedding,
-            target_domain_count,
+            dataset_target_domain_count,
+            dataset_source_domain_count,
         )
     elif dataset_name == "MIMIC":
         assert dataset_y_column is not None
         assert dataset_z_column is not None
+        assert dataset_target_domain_count is not None
         assert dataset_use_embedding is True
         assert dataset_apply_rotation is None
         assert dataset_label_noise == 0
 
         root = Path("data/MIMIC")
-        target_domain_count = 512
         dataset = MultipleDomainMIMIC(
             root,
             train_domains_set,
@@ -297,7 +312,8 @@ def prepare_dataset(
             dataset_y_column,
             dataset_z_column,
             dataset_use_embedding,
-            target_domain_count,
+            dataset_target_domain_count,
+            dataset_source_domain_count,
         )
     else:
         raise ValueError(f"Unknown dataset {dataset_name}")
@@ -306,6 +322,7 @@ def prepare_dataset(
     if C != 2 or K != 2:
         raise NotImplementedError("Multi-label classification is not supported yet.")
 
+    print("domains", [len(domain) for _, domain in dataset.domains])
     train, calibration, test_splits = split(
         dataset,
         train_domains_set,

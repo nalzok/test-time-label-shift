@@ -8,7 +8,7 @@ from tta.datasets import MultipleDomainDataset
 
 class MultipleDomainCXR(MultipleDomainDataset):
 
-    def build(self, generator, datastore, labels, Y_col, Z_col, patient_col, target_domain_count):
+    def build(self, generator, datastore, labels, Y_col, Z_col, patient_col, target_domain_count, source_domain_count):
         # Pathology:    0 = Negative, 1 = Positive
         # GENDER:       0 = Female, 1 = Male
         labels["M"] = 2 * labels[Y_col] + labels[Z_col]
@@ -43,10 +43,16 @@ class MultipleDomainCXR(MultipleDomainDataset):
 
             quota = labels["M"].loc[mask].value_counts().sort_index().values - target_domain_count
             quota = torch.from_numpy(quota)
-            joint_M = strength * anchor1 + (1-strength) * anchor2
-            joint_M_flatten = torch.from_numpy(joint_M).flatten()
-            count = torch.round(torch.min(quota/joint_M_flatten)*joint_M_flatten).long()
-            count = count.reshape((2, 2))
+            joint_M = torch.from_numpy(strength * anchor1 + (1-strength) * anchor2)
+            if source_domain_count is None:
+                source_domain_count = torch.floor(torch.min(quota/joint_M.flatten())).item()
+            count = torch.round(source_domain_count * joint_M).long()
+            count = self.fix_count(count, source_domain_count)
+
+            count_flatten = torch.flatten(count)
+            if torch.any(count_flatten > quota):
+                raise ValueError(f"Insufficient samples for the source domain: {count_flatten} > {quota}")
+
             joint_M = count / torch.sum(count)
 
             print(f"histogram(M) = {count.flatten()}")
@@ -64,30 +70,9 @@ class MultipleDomainCXR(MultipleDomainDataset):
             if i == self.train_domain:
                 continue
 
-            joint_M = strength * anchor1 + (1-strength) * anchor2
-            joint_M_flatten = torch.from_numpy(joint_M).flatten()
-            count = torch.round(target_domain_count * joint_M_flatten).long()
-
-            l1, l2, l3 = torch.topk(count, 3).indices
-            if torch.sum(count) > target_domain_count:
-                count[l1] -= 1
-            if torch.sum(count) > target_domain_count:
-                count[l2] -= 1
-            if torch.sum(count) > target_domain_count:
-                count[l3] -= 1
-
-            s1, s2, s3 = torch.topk(count, 3, largest=False).indices
-            if torch.sum(count) < target_domain_count:
-                count[s1] += 1
-            if torch.sum(count) < target_domain_count:
-                count[s2] += 1
-            if torch.sum(count) < target_domain_count:
-                count[s3] += 1
-
-            total_count = torch.sum(count)
-            assert total_count == target_domain_count, f"Incorrect total count: {total_count} != {target_domain_count}"
-
-            count = count.reshape((2, 2))
+            joint_M = torch.from_numpy(strength * anchor1 + (1-strength) * anchor2)
+            count = torch.round(target_domain_count * joint_M).long()
+            count = self.fix_count(count, target_domain_count)
             joint_M = count / torch.sum(count)
 
             print(f"histogram(M) = {count.flatten()}")
@@ -95,6 +80,33 @@ class MultipleDomainCXR(MultipleDomainDataset):
             domains[i] = (joint_M, domain)
 
         return domains
+
+
+    def fix_count(self, count, domain_count):
+        count = torch.flatten(count)
+
+        l1, l2, l3 = torch.topk(count, 3).indices
+        if torch.sum(count) > domain_count:
+            count[l1] -= 1
+        if torch.sum(count) > domain_count:
+            count[l2] -= 1
+        if torch.sum(count) > domain_count:
+            count[l3] -= 1
+
+        s1, s2, s3 = torch.topk(count, 3, largest=False).indices
+        if torch.sum(count) < domain_count:
+            count[s1] += 1
+        if torch.sum(count) < domain_count:
+            count[s2] += 1
+        if torch.sum(count) < domain_count:
+            count[s3] += 1
+
+        total_count = torch.sum(count)
+        if total_count != domain_count:
+            raise ValueError(f"Incorrect total count: {total_count} != {domain_count}")
+
+        count = count.reshape((2, 2))
+        return count
 
 
     def sample(self, generator, datastore, labels, Y_col, Z_col, patient_col, mask, count, reservation):

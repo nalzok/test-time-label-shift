@@ -1,6 +1,8 @@
-.PHONY: paper-mnist paper-chexpert-embedding paper-chexpert-pixel baseline manova tree
+.PHONY: paper paper-chexpert paper-mnist paper-chexpert-embedding paper-chexpert-pixel baseline manova tree
 
-paper: paper-mnist paper-chexpert-embedding paper-chexpert-pixel
+paper: paper-mnist paper-chexpert
+
+paper-chexpert: paper-chexpert-embedding paper-chexpert-pixel
 
 paper-mnist:
 	parallel \
@@ -36,7 +38,7 @@ paper-mnist:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title ColoredMNIST \
-		--plot_only True \
+		--plot_only False \
 		::: False \
 		::: 0.1 \
 		::: 2 10 \
@@ -58,6 +60,8 @@ paper-chexpert-embedding:
 		--dataset_name CheXpert \
 		--dataset_Y_column {1} \
 		--dataset_Z_column {2} \
+		--dataset_target_domain_count 512 \
+		--dataset_source_domain_count 85267 \
 		--dataset_use_embedding True \
 		--dataset_label_noise 0 \
 		--train_joint True \
@@ -83,7 +87,7 @@ paper-chexpert-embedding:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert-embedding \
-		--plot_only True \
+		--plot_only False \
 		::: EFFUSION \
 		::: GENDER \
 		::: 2 10 \
@@ -105,6 +109,8 @@ paper-chexpert-pixel:
 		--dataset_name CheXpert \
 		--dataset_Y_column {1} \
 		--dataset_Z_column {2} \
+		--dataset_target_domain_count 512 \
+		--dataset_source_domain_count 85267 \
 		--dataset_use_embedding False \
 		--dataset_label_noise 0 \
 		--train_joint True \
@@ -131,7 +137,7 @@ paper-chexpert-pixel:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert-pixel \
-		--plot_only True \
+		--plot_only False \
 		::: EFFUSION \
 		::: GENDER \
 		::: 2 10 \
