@@ -70,8 +70,8 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         self.train_domains = train_domains
         self.label_noise = label_noise
 
-        original_dataset_tr = MNIST(root, train=True, download=False)
-        original_dataset_te = MNIST(root, train=False, download=False)
+        original_dataset_tr = MNIST(root, train=True, download=True)
+        original_dataset_te = MNIST(root, train=False, download=True)
 
         original_images = torch.cat((original_dataset_tr.data,
                                      original_dataset_te.data))
