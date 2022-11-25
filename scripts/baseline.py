@@ -112,8 +112,8 @@ def baseline(data_matrix, column):
         params, opt_state, _, _ = train_step(params, opt_state, model, tx, X, Y)
 
     _, test_score = test_step(params, model, X_test, Y_test)
-    test_auc = roc_auc_score(Y_test.reshape(-1), test_score.reshape(-1))
-    print(rf"{column.replace('_', chr(92)+'_')} & {test_auc:.3f} \\")
+    auc = roc_auc_score(Y_test.reshape(-1), test_score.reshape(-1))
+    print(rf"{column.replace('_', chr(92)+'_')} & {auc:.3f} & {np.mean(Y_test):.3f} \\")
 
 
 if __name__ == "__main__":
