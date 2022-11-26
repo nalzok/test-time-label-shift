@@ -133,8 +133,9 @@ def main():
     fig.tight_layout()
 
     format_axes(ax)
+    train_domain = next(iter(train_domains_set))
     for suffix in ("png", "pdf"):
-        plt.savefig(f"plots/tree_chexpert_{next(iter(train_domains_set))}.{suffix}", dpi=300)
+        plt.savefig(f"plots/chexpert-embedding_{dataset_y_column}_{dataset_z_column}_domain{train_domain}_tree_prior{prior_strength}.{suffix}", dpi=300)
 
     plt.close(fig)
 
