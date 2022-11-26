@@ -66,6 +66,10 @@ def main():
     auc_unadapted = []
     auc_adapted = []
     auc_oracle = []
+
+    prior_strength = 1
+    alpha = prior_strength * 4 * source
+
     print("AUC")
     for i, (target_oracle, test) in enumerate(test_splits):
         target_oracle = target_oracle.numpy().flatten()
@@ -84,7 +88,7 @@ def main():
             prob_em = prob_em / normalizer
 
             # M step
-            prob_em_count = np.sum(prob_em, axis=0)
+            prob_em_count = np.sum(prob_em, axis=0) + (alpha - 1)
             target = prob_em_count / np.sum(prob_em_count)
 
             if np.all(target == old):
@@ -123,7 +127,7 @@ def main():
     plt.ylim((0.7, 1))
     plt.xlabel("Shift parameter")
     plt.ylabel("AUC")
-    plt.title("XGBoost on ColoredMNIST")
+    plt.title("XGBoost on CheXpert-embedding")
     plt.grid(True)
     plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=3, frameon=False)
     fig.tight_layout()
