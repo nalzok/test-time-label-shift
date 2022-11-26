@@ -158,5 +158,4 @@ manova:
 	pipenv run python3 -m scripts.manova
 
 tree:
-	pipenv run python3 -m scripts.tree_mnist
-	pipenv run python3 -m scripts.tree_chexpert
+	pipenv run python3 -m scripts.tree
