@@ -38,7 +38,7 @@ paper-mnist:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title ColoredMNIST \
-		--plot_only False \
+		--plot_only True \
 		::: False \
 		::: 0.1 \
 		::: 2 10 \
@@ -87,7 +87,7 @@ paper-chexpert-embedding:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert-embedding \
-		--plot_only False \
+		--plot_only True \
 		::: EFFUSION \
 		::: GENDER \
 		::: 2 10 \
@@ -137,7 +137,7 @@ paper-chexpert-pixel:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert-pixel \
-		--plot_only False \
+		--plot_only True \
 		::: EFFUSION \
 		::: GENDER \
 		::: 2 10 \
@@ -158,4 +158,5 @@ manova:
 	pipenv run python3 -m scripts.manova
 
 tree:
-	pipenv run python3 -m scripts.tree
+	pipenv run python3 -m scripts.tree_mnist
+	pipenv run python3 -m scripts.tree_chexpert

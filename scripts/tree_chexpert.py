@@ -1,4 +1,5 @@
 from pathlib import Path
+from itertools import count
 
 import numpy as np
 import torch
@@ -15,12 +16,12 @@ def main():
     seed = 42
     generator = torch.Generator().manual_seed(seed)
 
+    train_domains_set = {10}
     dataset_y_column = "EFFUSION"
     dataset_z_column = "GENDER"
     dataset_target_domain_count = 512
     dataset_source_domain_count = 85267
     dataset_use_embedding = True
-    train_domains_set = {10}
 
     root = Path("data/CheXpert")
     dataset = MultipleDomainCheXpert(
@@ -79,7 +80,7 @@ def main():
 
         target = np.copy(source)
 
-        while True:
+        for j in count():
             old = target
 
             # E step
@@ -91,7 +92,7 @@ def main():
             prob_em_count = np.sum(prob_em, axis=0) + (alpha - 1)
             target = prob_em_count / np.sum(prob_em_count)
 
-            if np.all(target == old):
+            if np.allclose(target, old) or j > 10000:
                 break
 
         prob_oracle = target_oracle * prob / source
@@ -135,7 +136,7 @@ def main():
     format_axes(ax)
     train_domain = next(iter(train_domains_set))
     for suffix in ("png", "pdf"):
-        plt.savefig(f"plots/chexpert-embedding_{dataset_y_column}_{dataset_z_column}_domain{train_domain}_tree_prior{prior_strength}.{suffix}", dpi=300)
+        plt.savefig(f"plots/chexpert-embedding_{dataset_y_column}_{dataset_z_column}_domain{train_domain}_tree_prior{prior_strength}_auc.{suffix}", dpi=300)
 
     plt.close(fig)
 
