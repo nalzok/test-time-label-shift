@@ -1,5 +1,7 @@
 # Beyond Invariance: Test-Time Label-Shift Adaptation for Distributions with "Spurious" Correlations
 
+Available: https://arxiv.org/abs/2211.15646
+
 To cite our paper
 
 ```
