@@ -62,7 +62,7 @@ class MultipleDomainMIMIC(MultipleDomainCXR):
         self.generator = generator
         self.train_domains = train_domains
 
-        labels: pd.DataFrame = pd.read_csv(root / "mimic_labels_raw.csv", index_col="dicom_id")
+        labels: pd.DataFrame = pd.read_csv(root / "mimic_labels_with_demographics.csv", index_col="dicom_id")
         datastore = np.load(root / "mimic.npz")
 
         #   Pneumonia
@@ -79,13 +79,22 @@ class MultipleDomainMIMIC(MultipleDomainCXR):
         #  0 = negative     - 25991
         # -1 = uncertain    - 14244
         #  1 = positive     - 29331
+        #
+        #   gender
+        #  M                - 864875
+        #  F                - 737362
         relevant_columns = {Y_col, Z_col}
         pathology_dtype = CategoricalDtype(categories=(0.0, 1.0))
-        for column in ("Pneumonia", "Pleural Effusion", "Edema"):
+        gender_dtype = CategoricalDtype(categories=("F", "M"))
+        for column in ("Pneumonia", "Pleural Effusion", "Edema", "gender"):
             if column not in relevant_columns:
                 continue
 
-            labels[column] = labels[column].astype(pathology_dtype)
+            if column in {"Pneumonia", "Pleural Effusion", "Edema"}:
+                labels[column] = labels[column].astype(pathology_dtype)
+            elif column == "gender":
+                labels[column] = labels[column].astype(gender_dtype)
+
             nlevels = len(labels[column].dtype.categories)
             if nlevels != 2:
                 raise NotImplementedError(f"Column {column} has {nlevels} != 2 levels.")

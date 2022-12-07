@@ -148,6 +148,64 @@ paper-chexpert-pixel:
 		--source npz/chexpert-pixel_EFFUSION_GENDER_domain10_train100_cali20_prior1.npz \
 		--target npz/chexpert-pixel_EFFUSION_GENDER_domain2_train100_cali20_prior1.npz
 
+paper-mimic-embedding:
+	parallel \
+		--eta \
+		--jobs 1 \
+		--joblog joblog-$@.txt \
+		pipenv run python3 \
+		-m tta.cli \
+		--config_name mimic-embedding_{1}_{2}_domain{3}_train{4}_cali{5}_prior{6} \
+		--dataset_name MIMIC \
+		--dataset_Y_column {1} \
+		--dataset_Z_column {2} \
+		--dataset_target_domain_count 512 \
+		--dataset_source_domain_count 85267 \
+		--dataset_use_embedding True \
+		--dataset_label_noise 0 \
+		--train_joint True \
+		--train_model Linear \
+		--train_domains {3} \
+		--train_fraction 0.9 \
+		--train_calibration_fraction 0.1 \
+		--train_batch_size 64 \
+		--train_epochs {4} \
+		--train_lr 1e-3 \
+		--calibration_batch_size 64 \
+		--calibration_epochs {5} \
+		--calibration_lr 1e-3 \
+		--adapt_gmtl_alpha 0.5 \
+		--adapt_gmtl_alpha 1 \
+		--adapt_gmtl_alpha 2 \
+		--adapt_prior_strength {6} \
+		--adapt_symmetric_dirichlet False \
+		--adapt_fix_marginal False \
+		--test_argmax_joint False \
+		--test_batch_size 64 \
+		--test_batch_size 512 \
+		--seed 2022 \
+		--num_workers 48 \
+		--plot_title MIMIC-embedding \
+		--plot_only False \
+		::: Pneumonia \
+		::: gender \
+		::: 2 4 6 8 10 \
+		::: 500 \
+		::: 100 \
+		::: 1
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mimic-embedding_Pneumonia_gender_domain10_train500_cali100_prior1.npz \
+		--target npz/mimic-embedding_Pneumonia_gender_domain2_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mimic-embedding_Pneumonia_gender_domain10_train500_cali100_prior1.npz \
+		--target npz/mimic-embedding_Pneumonia_gender_domain4_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mimic-embedding_Pneumonia_gender_domain10_train500_cali100_prior1.npz \
+		--target npz/mimic-embedding_Pneumonia_gender_domain6_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mimic-embedding_Pneumonia_gender_domain10_train500_cali100_prior1.npz \
+		--target npz/mimic-embedding_Pneumonia_gender_domain8_train500_cali100_prior1.npz
+
 data/CheXpert/data_matrix.npz:
 	pipenv run python3 -m scripts.matching
 

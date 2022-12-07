@@ -117,7 +117,7 @@ class MultipleDomainCXR(MultipleDomainDataset):
                 for Z in range(2):
                     masked = labels.loc[mask & (labels["M"] == 2 * Y + Z)]
                     image_per_patient = masked.groupby(patient_col).size()
-                    weights = softmax(image_per_patient.loc[masked[patient_col]].values)
+                    weights = image_per_patient.loc[masked[patient_col]].values
                     indices = masked.sample(int(count[Y, Z]), weights=weights, random_state=random_state)
                     in_sample.update(indices.index)
 
@@ -126,7 +126,7 @@ class MultipleDomainCXR(MultipleDomainDataset):
                 in_sample_patients = { fname.split("/")[2] for fname in in_sample }
             elif class_name == "MultipleDomainMIMIC":
                 subject_id = labels["subject_id"]
-                in_sample_patients = { subject_id.loc[dicom_id] for dicom_id in in_sample }
+                in_sample_patients = { subject_id.at[dicom_id].item() for dicom_id in in_sample }
             else:
                 raise NotImplementedError(f"Unknown dataset {class_name}")
 
