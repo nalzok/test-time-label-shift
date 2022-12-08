@@ -26,9 +26,6 @@ paper-mnist:
 		--calibration_batch_size 64 \
 		--calibration_epochs {5} \
 		--calibration_lr 1e-3 \
-		--adapt_gmtl_alpha 0.5 \
-		--adapt_gmtl_alpha 1 \
-		--adapt_gmtl_alpha 2 \
 		--adapt_prior_strength {6} \
 		--adapt_symmetric_dirichlet False \
 		--adapt_fix_marginal False \
@@ -38,16 +35,40 @@ paper-mnist:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title ColoredMNIST \
-		--plot_only True \
+		--plot_only False \
 		::: False \
 		::: 0.1 \
-		::: 2 10 \
+		::: 10 9 8 7 6 5 4 3 2 1 \
 		::: 500 \
 		::: 100 \
 		::: 1
 	pipenv run python3 -m scripts.superpose \
 		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
+		--target npz/mnist_rotFalse_noise0.1_domain9_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
+		--target npz/mnist_rotFalse_noise0.1_domain8_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
+		--target npz/mnist_rotFalse_noise0.1_domain7_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
+		--target npz/mnist_rotFalse_noise0.1_domain6_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
+		--target npz/mnist_rotFalse_noise0.1_domain5_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
+		--target npz/mnist_rotFalse_noise0.1_domain4_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
+		--target npz/mnist_rotFalse_noise0.1_domain3_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
 		--target npz/mnist_rotFalse_noise0.1_domain2_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
+		--target npz/mnist_rotFalse_noise0.1_domain1_train500_cali100_prior1.npz
 
 paper-chexpert-embedding:
 	parallel \
@@ -160,7 +181,7 @@ paper-mimic-embedding:
 		--dataset_Y_column {1} \
 		--dataset_Z_column {2} \
 		--dataset_target_domain_count 512 \
-		--dataset_source_domain_count 85267 \
+		--dataset_source_domain_count 24584 \
 		--dataset_use_embedding True \
 		--dataset_label_noise 0 \
 		--train_joint True \
@@ -186,25 +207,37 @@ paper-mimic-embedding:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title MIMIC-embedding \
-		--plot_only False \
+		--plot_only True \
 		::: Pneumonia \
 		::: gender \
-		::: 2 4 6 8 10 \
+		::: 10 9 8 7 6 5 4 3 2 \
 		::: 500 \
 		::: 100 \
 		::: 1
 	pipenv run python3 -m scripts.superpose \
 		--source npz/mimic-embedding_Pneumonia_gender_domain10_train500_cali100_prior1.npz \
-		--target npz/mimic-embedding_Pneumonia_gender_domain2_train500_cali100_prior1.npz
+		--target npz/mimic-embedding_Pneumonia_gender_domain9_train500_cali100_prior1.npz
 	pipenv run python3 -m scripts.superpose \
 		--source npz/mimic-embedding_Pneumonia_gender_domain10_train500_cali100_prior1.npz \
-		--target npz/mimic-embedding_Pneumonia_gender_domain4_train500_cali100_prior1.npz
+		--target npz/mimic-embedding_Pneumonia_gender_domain8_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mimic-embedding_Pneumonia_gender_domain10_train500_cali100_prior1.npz \
+		--target npz/mimic-embedding_Pneumonia_gender_domain7_train500_cali100_prior1.npz
 	pipenv run python3 -m scripts.superpose \
 		--source npz/mimic-embedding_Pneumonia_gender_domain10_train500_cali100_prior1.npz \
 		--target npz/mimic-embedding_Pneumonia_gender_domain6_train500_cali100_prior1.npz
 	pipenv run python3 -m scripts.superpose \
 		--source npz/mimic-embedding_Pneumonia_gender_domain10_train500_cali100_prior1.npz \
-		--target npz/mimic-embedding_Pneumonia_gender_domain8_train500_cali100_prior1.npz
+		--target npz/mimic-embedding_Pneumonia_gender_domain5_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mimic-embedding_Pneumonia_gender_domain10_train500_cali100_prior1.npz \
+		--target npz/mimic-embedding_Pneumonia_gender_domain4_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mimic-embedding_Pneumonia_gender_domain10_train500_cali100_prior1.npz \
+		--target npz/mimic-embedding_Pneumonia_gender_domain3_train500_cali100_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/mimic-embedding_Pneumonia_gender_domain10_train500_cali100_prior1.npz \
+		--target npz/mimic-embedding_Pneumonia_gender_domain2_train500_cali100_prior1.npz
 
 data/CheXpert/data_matrix.npz:
 	pipenv run python3 -m scripts.matching

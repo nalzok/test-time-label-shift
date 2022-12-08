@@ -44,14 +44,17 @@ class MultipleDomainCXR(MultipleDomainDataset):
             quota = labels["M"].loc[mask].value_counts().sort_index().values - target_domain_count
             quota = torch.from_numpy(quota)
             joint_M = torch.from_numpy(strength * anchor1 + (1-strength) * anchor2)
+
+            source_domain_count_max = torch.floor(torch.min(quota/joint_M.flatten())).item()
             if source_domain_count is None:
-                source_domain_count = torch.floor(torch.min(quota/joint_M.flatten())).item()
+                source_domain_count = source_domain_count_max
+            elif source_domain_count > source_domain_count_max:
+                raise ValueError(f"Insufficient samples for the source domain: {source_domain_count} > {source_domain_count_max}")
+
             count = torch.round(source_domain_count * joint_M).long()
             count = self.fix_count(count, source_domain_count)
-
             count_flatten = torch.flatten(count)
-            if torch.any(count_flatten > quota):
-                raise ValueError(f"Insufficient samples for the source domain: {count_flatten} > {quota}")
+            assert torch.all(count_flatten <= quota), f"Insufficient samples for the source domain: {count_flatten} > {quota}"
 
             joint_M = count / torch.sum(count)
 

@@ -127,7 +127,7 @@ def plot(
             ax.axvline(confounder_strength[i], color="black",
                     linestyle="dotted", linewidth=3)
 
-        plt.ylim((0.7, 1))
+        plt.ylim((0.5, 1))
         plt.xlabel("Shift parameter")
         plt.ylabel(ylabel)
         plt.title(plot_title)

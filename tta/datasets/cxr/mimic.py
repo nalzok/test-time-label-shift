@@ -62,7 +62,9 @@ class MultipleDomainMIMIC(MultipleDomainCXR):
         self.generator = generator
         self.train_domains = train_domains
 
-        labels: pd.DataFrame = pd.read_csv(root / "mimic_labels_with_demographics.csv", index_col="dicom_id")
+        labels_raw: pd.DataFrame = pd.read_csv(root / "mimic_labels_raw.csv", index_col="dicom_id")
+        mimic_attributes: pd.DataFrame = pd.read_csv(root / "mimic_attributes.csv", index_col="dicom_id")
+        labels = labels_raw.join(mimic_attributes, rsuffix="_attr")
         datastore = np.load(root / "mimic.npz")
 
         #   Pneumonia
@@ -81,8 +83,8 @@ class MultipleDomainMIMIC(MultipleDomainCXR):
         #  1 = positive     - 29331
         #
         #   gender
-        #  M                - 864875
-        #  F                - 737362
+        #  M                - 130468
+        #  F                - 112001
         relevant_columns = {Y_col, Z_col}
         pathology_dtype = CategoricalDtype(categories=(0.0, 1.0))
         gender_dtype = CategoricalDtype(categories=("F", "M"))
