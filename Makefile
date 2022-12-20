@@ -15,7 +15,7 @@ paper-mnist:
 		--dataset_name MNIST \
 		--dataset_apply_rotation {1} \
 		--dataset_label_noise {2} \
-		--train_joint True \
+		--train_fit_joint True \
 		--train_model LeNet \
 		--train_domains {3} \
 		--train_fraction 0.9 \
@@ -77,29 +77,32 @@ paper-chexpert-embedding:
 		--joblog joblog-$@.txt \
 		pipenv run python3 \
 		-m tta.cli \
-		--config_name chexpert-embedding_{1}_{2}_domain{3}_train{4}_cali{5}_prior{6} \
+		--config_name chexpert-embedding_{1}_{2}_domain{3}_size{4}_tau{5}_train{6}_cali{7}_prior{8} \
 		--dataset_name CheXpert \
 		--dataset_Y_column {1} \
 		--dataset_Z_column {2} \
 		--dataset_target_domain_count 512 \
-		--dataset_source_domain_count 85267 \
+		--dataset_source_domain_count {4} \
 		--dataset_use_embedding True \
 		--dataset_label_noise 0 \
-		--train_joint True \
+		--train_fit_joint True \
+		--train_epoch_means_step True \
 		--train_model Linear \
 		--train_domains {3} \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
-		--train_epochs {4} \
+		--train_epochs {6} \
+		--train_tau {5} \
 		--train_lr 1e-3 \
 		--calibration_batch_size 64 \
-		--calibration_epochs {5} \
+		--calibration_epochs {7} \
+		--calibration_tau {5} \
 		--calibration_lr 1e-3 \
 		--adapt_gmtl_alpha 0.5 \
 		--adapt_gmtl_alpha 1 \
 		--adapt_gmtl_alpha 2 \
-		--adapt_prior_strength {6} \
+		--adapt_prior_strength {8} \
 		--adapt_symmetric_dirichlet False \
 		--adapt_fix_marginal False \
 		--test_argmax_joint False \
@@ -108,16 +111,33 @@ paper-chexpert-embedding:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert-embedding \
-		--plot_only True \
+		--plot_only False \
 		::: EFFUSION \
 		::: GENDER \
-		::: 2 10 \
-		::: 500 \
-		::: 100 \
+		::: 1 10 \
+		::: 65536 16384 4096 \
+		::: 1 0 \
+		::: 409500 \
+		::: 10200 \
 		::: 1
 	pipenv run python3 -m scripts.superpose \
-		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_train500_cali100_prior1.npz \
-		--target npz/chexpert-embedding_EFFUSION_GENDER_domain2_train500_cali100_prior1.npz
+		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size65536_tau1_train409500_cali10200_prior1.npz \
+		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size65536_tau1_train409500_cali10200_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size16384_tau1_train409500_cali10200_prior1.npz \
+		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size16384_tau1_train409500_cali10200_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size4096_tau1_train409500_cali10200_prior1.npz \
+		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size4096_tau1_train409500_cali10200_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size65536_tau0_train409500_cali10200_prior1.npz \
+		--target npz/chexpert-embedding_EFFUSION_GENDER_domain2_size65536_tau0_train409500_cali10200_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size16384_tau0_train409500_cali10200_prior1.npz \
+		--target npz/chexpert-embedding_EFFUSION_GENDER_domain2_size16384_tau0_train409500_cali10200_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size4096_tau0_train409500_cali10200_prior1.npz \
+		--target npz/chexpert-embedding_EFFUSION_GENDER_domain2_size4096_tau0_train409500_cali10200_prior1.npz
 
 paper-chexpert-pixel:
 	parallel \
@@ -134,7 +154,7 @@ paper-chexpert-pixel:
 		--dataset_source_domain_count 85267 \
 		--dataset_use_embedding False \
 		--dataset_label_noise 0 \
-		--train_joint True \
+		--train_fit_joint True \
 		--train_model ResNet50 \
 		--train_pretrained_path pretrained/ResNet50_ImageNet1k \
 		--train_domains {3} \
@@ -184,7 +204,7 @@ paper-mimic-embedding:
 		--dataset_source_domain_count 24584 \
 		--dataset_use_embedding True \
 		--dataset_label_noise 0 \
-		--train_joint True \
+		--train_fit_joint True \
 		--train_model Linear \
 		--train_domains {3} \
 		--train_fraction 0.9 \

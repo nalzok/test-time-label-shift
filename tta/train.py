@@ -45,9 +45,10 @@ def create_train_state(key: Any, C: int, K: int, model: str,
     return state
 
 
-@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3, 4), donate_argnums=(0,))
-def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, K: int, train_joint: bool) \
-        -> Tuple[TrainState, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
+@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3, 4, 5), donate_argnums=(0,))
+def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, K: int,
+        train_fit_joint: bool, tau: float, joint: jnp.ndarray) \
+                -> Tuple[TrainState, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
     @partial(jax.value_and_grad, has_aux=True)
     def loss_fn(params):
         variables = {
@@ -58,8 +59,9 @@ def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, K: int, train_
         logit, new_model_state = state.raw_fn(
             variables, X, True, mutable=['batch_stats']
         )
+        logit = logit + tau * jnp.log(joint)
 
-        if train_joint:
+        if train_fit_joint:
             loss = optax.softmax_cross_entropy_with_integer_labels(logit, M)
         else:
             logit_YZ = logit.reshape((-1, logit.shape[-1] // K, K))
@@ -88,10 +90,10 @@ def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, K: int, train_
     return state, (loss, hit, total)
 
 
-@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3, 4, 5), donate_argnums=(0,))
-def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray,
-        K: int, train_joint: bool, learning_rate: float) \
-        -> Tuple[TrainState, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
+@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3, 4, 5, 6), donate_argnums=(0,))
+def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, K: int,
+        train_fit_joint: bool, tau: float, learning_rate: float, joint: jnp.ndarray) \
+                -> Tuple[TrainState, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
     @partial(jax.value_and_grad, has_aux=True)
     def loss_fn(params):
         variables = {
@@ -102,8 +104,9 @@ def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray,
         logit, new_model_state = state.calibrated_fn(
             variables, X, True, mutable=['batch_stats']
         )
+        logit = logit + tau * jnp.log(joint)
 
-        if train_joint:
+        if train_fit_joint:
             loss = optax.softmax_cross_entropy_with_integer_labels(logit, M)
         else:
             logit_YZ = logit.reshape((-1, logit.shape[-1] // K, K))

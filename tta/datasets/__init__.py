@@ -31,7 +31,7 @@ def split(dataset: MultipleDomainDataset, train_domains: Set[int], train_fractio
 
     for i, (joint_M, domain) in enumerate(dataset.domains):
         if i in train_domains:
-            # For source domains, we split it into train + calibrate + test
+            # For source domains, we split it into train + calibration + test
             train, test = split_dataset(domain, int(len(domain)*train_fraction))
             calibration, train = split_dataset(train, int(len(domain)*train_calibration_fraction))
 
@@ -39,7 +39,7 @@ def split(dataset: MultipleDomainDataset, train_domains: Set[int], train_fractio
             calibration_splits.append(calibration)
             test_splits.append((joint_M, test))
         elif i in calibration_domains:
-            # For calibration domains, we split it into calibrate + test
+            # For calibration domains, we split it into calibration + test
             calibration, test = split_dataset(domain, int(len(domain)*calibration_fraction))
 
             calibration_splits.append(calibration)
@@ -48,7 +48,22 @@ def split(dataset: MultipleDomainDataset, train_domains: Set[int], train_fractio
             # For target domains, all samples are used as test
             test_splits.append((joint_M, domain))
 
-    train = ConcatDataset(train_splits)
-    calibrate = ConcatDataset(calibration_splits)
+    joint_shape = dataset.domains[0][0].shape
+    if joint_shape != (2, 2):
+        raise NotImplementedError(f"(C, K) = {joint_shape} != (2, 2)")
 
-    return train, calibrate, test_splits
+    train = ConcatDataset(train_splits)
+    joint_M_train = torch.zeros(np.prod(joint_shape))
+    for _, _, y, z in train:
+        m = y * joint_shape[-1] + z
+        joint_M_train[m] += 1
+    joint_M_train /= torch.sum(joint_M_train)
+
+    calibration = ConcatDataset(calibration_splits)
+    joint_M_calibration = torch.zeros(np.prod(joint_shape))
+    for _, _, y, z in calibration:
+        m = y * joint_shape[-1] + z
+        joint_M_calibration[m] += 1
+    joint_M_calibration /= torch.sum(joint_M_calibration)
+
+    return (joint_M_train, train), (joint_M_calibration, calibration), test_splits
