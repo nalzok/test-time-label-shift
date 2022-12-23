@@ -111,7 +111,7 @@ paper-chexpert-embedding:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert-embedding \
-		--plot_only False \
+		--plot_only True \
 		::: EFFUSION \
 		::: GENDER \
 		::: 1 10 \
@@ -121,6 +121,15 @@ paper-chexpert-embedding:
 		::: 10200 \
 		::: 1
 	pipenv run python3 -m scripts.superpose \
+		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size65536_tau0_train409500_cali10200_prior1.npz \
+		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size65536_tau0_train409500_cali10200_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size16384_tau0_train409500_cali10200_prior1.npz \
+		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size16384_tau0_train409500_cali10200_prior1.npz
+	pipenv run python3 -m scripts.superpose \
+		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size4096_tau0_train409500_cali10200_prior1.npz \
+		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size4096_tau0_train409500_cali10200_prior1.npz
+	pipenv run python3 -m scripts.superpose \
 		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size65536_tau1_train409500_cali10200_prior1.npz \
 		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size65536_tau1_train409500_cali10200_prior1.npz
 	pipenv run python3 -m scripts.superpose \
@@ -129,15 +138,6 @@ paper-chexpert-embedding:
 	pipenv run python3 -m scripts.superpose \
 		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size4096_tau1_train409500_cali10200_prior1.npz \
 		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size4096_tau1_train409500_cali10200_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size65536_tau0_train409500_cali10200_prior1.npz \
-		--target npz/chexpert-embedding_EFFUSION_GENDER_domain2_size65536_tau0_train409500_cali10200_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size16384_tau0_train409500_cali10200_prior1.npz \
-		--target npz/chexpert-embedding_EFFUSION_GENDER_domain2_size16384_tau0_train409500_cali10200_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size4096_tau0_train409500_cali10200_prior1.npz \
-		--target npz/chexpert-embedding_EFFUSION_GENDER_domain2_size4096_tau0_train409500_cali10200_prior1.npz
 
 paper-chexpert-pixel:
 	parallel \

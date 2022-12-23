@@ -32,7 +32,6 @@ from tta.train import (
     train_step,
     calibration_step,
     cross_replica_mean,
-    induce_step,
     adapt_step,
     test_step,
 )
@@ -567,6 +566,15 @@ def train_fn(
     restored = restore_checkpoint("checkpoints/", state, prefix=prefix)
     if restored is not state:
         print(f"Restoring checkpoint with {prefix = }")
+
+        # HACK: backward compatibility
+        prior = restored.prior.unfreeze()
+        print('prior["source"]', prior["source"])
+        prior["source"] = jnp.ones_like(prior["source"])
+        prior["source"] = prior["source"] / jnp.sum(prior["source"])
+        print('prior["source"]', prior["source"])
+        restored = restored.replace(prior=flax.core.frozen_dict.freeze(prior))
+
         return replicate(restored)
     else:
         print(f"Cannot find checkpoint with {prefix = }")
@@ -659,40 +667,7 @@ def train_fn(
     print("---> Temperature =", unreplicate(state.params["T"]))
     print("---> Bias =", unreplicate(state.params["b"]))
 
-    print("===> Estimating Source Label Prior")
-    source_prior_induced = estimate_source_prior(
-        calibration,
-        calibration_batch_size,
-        num_workers,
-        generator,
-        C,
-        K,
-        device_count,
-        state,
-        "induce",
-    )
-    source_prior_empirical = estimate_source_prior(
-        train,
-        train_batch_size,
-        num_workers,
-        generator,
-        C,
-        K,
-        device_count,
-        state,
-        "count",
-    )
-
-    print("---> Induced source label prior =", source_prior_induced)
-    print("---> Empirical source label prior =", source_prior_empirical)
-    tvd = jnp.sum(jnp.abs(source_prior_induced - source_prior_empirical)) / 2
-    print("---> Total variation distance =", tvd)
-
-    prior = state.prior.unfreeze()
-    prior["source"] = replicate(source_prior_induced)
-    state = state.replace(prior=flax.core.frozen_dict.freeze(prior))
-
-    save_checkpoint("checkpoints/", unreplicate(state), -tvd, prefix)
+    save_checkpoint("checkpoints/", unreplicate(state), 0, prefix)
 
     return state
 
@@ -922,52 +897,6 @@ def adapt_fn(
         accuracy_Z_sweep,
         norm_sweep,
     )
-
-
-def estimate_source_prior(
-    dataset: Dataset,
-    batch_size: int,
-    num_workers: int,
-    generator: torch.Generator,
-    C: int,
-    K: int,
-    device_count: int,
-    state: TrainState,
-    method: str,
-) -> jnp.ndarray:
-    loader = DataLoader(
-        dataset,
-        batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        generator=generator,
-    )
-    if method == "count":
-        source_prior = np.zeros((C * K))
-        I = np.identity(C * K)
-        for _, _, Y, Z in loader:
-            M = Y * K + Z
-            source_prior += np.sum(I[M], axis=0)
-
-        source_prior = jnp.array(source_prior / np.sum(source_prior))
-
-    elif method == "induce":
-        N = 0
-        source_prior = jnp.zeros(C * K)
-        for X, _, _, _ in loader:
-            remainder = X.shape[0] % device_count
-            X = X[remainder:]
-
-            N += X.shape[0]
-            X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
-            source_prior = source_prior + unreplicate(induce_step(state, X))
-
-        source_prior = source_prior / N
-
-    else:
-        raise ValueError(f"Unknown source label prior estimation method {method}")
-
-    return source_prior
 
 
 if __name__ == "__main__":
