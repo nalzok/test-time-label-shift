@@ -90,6 +90,33 @@ def train_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, K: int,
     return state, (loss, hit, total)
 
 
+@partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3, 4, 5))
+def validation_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, K: int,
+        train_fit_joint: bool, tau: float, joint: jnp.ndarray) -> jnp.ndarray:
+    variables = {
+        'params': state.params,
+        'batch_stats': state.batch_stats,
+        'prior': state.prior
+    }
+    logit = state.raw_fn(variables, X, False)
+    logit = logit + tau * jnp.log(joint)
+
+    if train_fit_joint:
+        loss = optax.softmax_cross_entropy_with_integer_labels(logit, M)
+    else:
+        logit_YZ = logit.reshape((-1, logit.shape[-1] // K, K))
+        logit_Y = jax.nn.logsumexp(logit_YZ, axis=-1)
+        logit_Z = jax.nn.logsumexp(logit_YZ, axis=-2)
+        loss_Y = optax.softmax_cross_entropy_with_integer_labels(logit_Y, M // K)
+        loss_Z = optax.softmax_cross_entropy_with_integer_labels(logit_Z, M % K)
+        loss = loss_Y + loss_Z
+
+    loss = loss.sum()
+    loss = jax.lax.psum(loss, axis_name='batch')
+
+    return loss
+
+
 @partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3, 4, 5, 6), donate_argnums=(0,))
 def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, K: int,
         train_fit_joint: bool, tau: float, learning_rate: float, joint: jnp.ndarray) \

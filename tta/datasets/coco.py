@@ -79,7 +79,7 @@ class ColoredCOCO(MultipleDomainDataset):
             indices = shuffle[i::len(self.confounder_strength)]
             prob = torch.from_numpy(strength * confounding1 + (1-strength) * confounding2)
             domain = self.dataset_transform(indices, prob)
-            self.domains.append((prob, domain))     # FIXME: prob should be joint
+            self.domains.append((domain, prob))     # FIXME: prob should be joint
 
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         print(f'Saving cached datasets to {cache_file}')

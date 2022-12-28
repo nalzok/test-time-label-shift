@@ -20,7 +20,7 @@ from sklearn.metrics import roc_auc_score
 
 from tta.common import Adaptation, Curves, Sweeps
 from tta.utils import Tee
-from tta.datasets import MultipleDomainDataset, split
+from tta.datasets import MultipleDomainDataset, split, subsample
 from tta.datasets.mnist import MultipleDomainMNIST
 from tta.datasets.coco import ColoredCOCO
 from tta.datasets.waterbirds import MultipleDomainWaterbirds
@@ -30,6 +30,7 @@ from tta.train import (
     TrainState,
     create_train_state,
     train_step,
+    validation_step,
     calibration_step,
     cross_replica_mean,
     adapt_step,
@@ -50,11 +51,11 @@ from tta.visualize import latexify, plot
 @click.option("--dataset_Z_column", type=str, required=False)
 @click.option("--dataset_target_domain_count", type=int, required=False)
 @click.option("--dataset_source_domain_count", type=int, required=False)
+@click.option("--dataset_subsample_what", type=str, required=True)
 @click.option("--dataset_use_embedding", type=bool, required=False)
 @click.option("--dataset_apply_rotation", type=bool, required=False)
 @click.option("--dataset_label_noise", type=float, required=True)
 @click.option("--train_fit_joint", type=bool, required=True)
-@click.option("--train_epoch_means_step", type=bool, required=True)
 @click.option("--train_model", type=str, required=True)
 @click.option(
     "--train_pretrained_path", type=click.Path(path_type=Path), required=False
@@ -64,12 +65,14 @@ from tta.visualize import latexify, plot
 @click.option("--train_calibration_fraction", type=float, required=True)
 @click.option("--train_batch_size", type=int, required=True)
 @click.option("--train_epochs", type=int, required=True)
+@click.option("--train_patience", type=int, required=True)
 @click.option("--train_tau", type=float, required=True)
 @click.option("--train_lr", type=float, required=True)
 @click.option("--calibration_domains", type=str, required=False)
 @click.option("--calibration_fraction", type=float, required=False)
 @click.option("--calibration_batch_size", type=int, required=True)
 @click.option("--calibration_epochs", type=int, required=True)
+@click.option("--calibration_patience", type=int, required=True)
 @click.option("--calibration_tau", type=float, required=True)
 @click.option("--calibration_lr", type=float, required=True)
 @click.option("--adapt_gmtl_alpha", type=float, required=False, multiple=True)
@@ -91,11 +94,11 @@ def cli(
     dataset_z_column: Optional[str],
     dataset_target_domain_count: Optional[int],
     dataset_source_domain_count: Optional[int],
+    dataset_subsample_what: str,
     dataset_use_embedding: Optional[bool],
     dataset_apply_rotation: Optional[bool],
     dataset_label_noise: float,
     train_fit_joint: bool,
-    train_epoch_means_step: bool,
     train_model: str,
     train_pretrained_path: Optional[Path],
     train_domains: str,
@@ -103,12 +106,14 @@ def cli(
     train_calibration_fraction: float,
     train_batch_size: int,
     train_epochs: int,
+    train_patience: int,
     train_tau: float,
     train_lr: float,
     calibration_domains: Optional[str],
     calibration_fraction: Optional[float],
     calibration_batch_size: int,
     calibration_epochs: int,
+    calibration_patience: int,
     calibration_tau: float,
     calibration_lr: float,
     adapt_gmtl_alpha: Sequence[float],
@@ -142,8 +147,8 @@ def cli(
 
     (
         dataset,
-        (joint_train, train),
-        (joint_calibration, calibration),
+        (train, joint_train),
+        (calibration, joint_calibration),
         eval_splits,
         train_domains_set,
         calibration_domains_set,
@@ -153,6 +158,7 @@ def cli(
         dataset_z_column,
         dataset_target_domain_count,
         dataset_source_domain_count,
+        dataset_subsample_what,
         dataset_use_embedding,
         dataset_apply_rotation,
         dataset_label_noise,
@@ -168,24 +174,25 @@ def cli(
         main(
             npz_path,
             dataset,
-            joint_train,
             train,
-            joint_calibration,
+            joint_train,
             calibration,
+            joint_calibration,
             eval_splits,
             train_domains_set,
             calibration_domains_set,
             dataset_label_noise,
             train_fit_joint,
-            train_epoch_means_step,
             train_model,
             train_pretrained_path,
             train_batch_size,
             train_epochs,
+            train_patience,
             train_tau,
             train_lr,
             calibration_batch_size,
             calibration_epochs,
+            calibration_patience,
             calibration_tau,
             calibration_lr,
             adapt_gmtl_alpha,
@@ -216,6 +223,7 @@ def prepare_dataset(
     dataset_z_column: Optional[str],
     dataset_target_domain_count: Optional[int],
     dataset_source_domain_count: Optional[int],
+    dataset_subsample_what: str,
     dataset_use_embedding: Optional[bool],
     dataset_apply_rotation: Optional[bool],
     dataset_label_noise: float,
@@ -227,9 +235,9 @@ def prepare_dataset(
     generator: torch.Generator,
 ) -> Tuple[
     MultipleDomainDataset,
-    ConcatDataset,
-    ConcatDataset,
-    List[Tuple[torch.Tensor, Dataset]],
+    Tuple[Dataset, torch.Tensor],
+    Tuple[Dataset, torch.Tensor],
+    List[Tuple[Dataset, torch.Tensor]],
     Set[int],
     Set[int],
 ]:
@@ -332,8 +340,13 @@ def prepare_dataset(
     if C != 2 or K != 2:
         raise NotImplementedError("Multi-label classification is not supported yet.")
 
-    print("domains", [len(domain) for _, domain in dataset.domains])
-    (joint_train, train), (joint_calibration, calibration), test_splits = split(
+    m = sha256()
+    m.update(dataset.hexdigest.encode())
+    m.update(dataset_subsample_what.encode())
+    dataset.hexdigest = m.hexdigest()
+
+    print("domains:", [len(domain) for domain, _ in dataset.domains])
+    (train, joint_train), (calibration, joint_calibration), test_splits = split(
         dataset,
         train_domains_set,
         train_fraction,
@@ -341,18 +354,31 @@ def prepare_dataset(
         calibration_domains_set,
         calibration_fraction,
     )
-    print("train", len(train), joint_train)
-    print("calibration", len(calibration), joint_calibration)
+    print("train (before subsampling):", len(train))
+    print(joint_train)
+    print("calibration (before subsampling):", len(calibration))
+    print(joint_calibration)
+
+    if dataset_subsample_what != "none":
+        train, joint_train = subsample(train, joint_train, dataset_subsample_what, generator)
+        calibration, joint_calibration = subsample(calibration, joint_calibration, dataset_subsample_what, generator)
+        print("train (after subsampling):", len(train))
+        print(joint_train)
+        print("calibration (after subsampling):", len(calibration))
+        print(joint_calibration)
+
     (train_domain,) = train_domains_set
-    print(f"test_splits[{train_domain}][-1]", len(test_splits[train_domain][-1]))
+    test_split_train, joint_M_train = test_splits[train_domain]
+    print(f"test_split_train:", len(test_split_train))
+    print(joint_M_train)
 
     eval_splits = test_splits.copy()
-    eval_splits.append((*test_splits[train_domain][:-1], train))
+    eval_splits.append((train, joint_train))
 
     return (
         dataset,
-        (joint_train, train),
-        (joint_calibration, calibration),
+        (train, joint_train),
+        (calibration, joint_calibration),
         eval_splits,
         train_domains_set,
         calibration_domains_set,
@@ -362,24 +388,25 @@ def prepare_dataset(
 def main(
     npz_path: Path,
     dataset: MultipleDomainDataset,
-    joint_train: torch.Tensor,
     train: ConcatDataset,
-    joint_calibration: torch.Tensor,
+    joint_train: torch.Tensor,
     calibration: ConcatDataset,
-    eval_splits: List[Tuple[torch.Tensor, Dataset]],
+    joint_calibration: torch.Tensor,
+    eval_splits: List[Tuple[Dataset, torch.Tensor]],
     train_domains_set: Set[int],
     calibration_domains_set: Set[int],
     dataset_label_noise: float,
     train_fit_joint: bool,
-    train_epoch_means_step: bool,
     train_model: str,
     train_pretrained_path: Optional[Path],
     train_batch_size: int,
     train_epochs: int,
+    train_patience: int,
     train_tau: float,
     train_lr: float,
     calibration_batch_size: int,
     calibration_epochs: int,
+    calibration_patience: int,
     calibration_tau: float,
     calibration_lr: float,
     adapt_gmtl_alpha: Sequence[float],
@@ -404,30 +431,23 @@ def main(
             batch_size % device_count == 0
         ), f"test_batch_size should be divisible by {device_count}"
 
-    if train_epoch_means_step:
-        train_epochs //= len(train) // train_batch_size
-        calibration_epochs //= len(calibration) // calibration_batch_size
-
-    train_steps = train_epochs * (len(train) // train_batch_size)
-    calibration_steps = calibration_epochs * (len(calibration) // calibration_batch_size)
-    print(f"Train epochs: {train_epochs}, steps: {train_steps}")
-    print(f"Calibration epochs: {calibration_epochs}, steps: {calibration_steps}")
-
     state = train_fn(
         dataset,
-        joint_train,
         train,
-        joint_calibration,
+        joint_train,
         calibration,
+        joint_calibration,
         train_fit_joint,
         train_model,
         train_pretrained_path,
         train_batch_size,
         train_epochs,
+        train_patience,
         train_tau,
         train_lr,
         calibration_batch_size,
         calibration_epochs,
+        calibration_patience,
         calibration_tau,
         calibration_lr,
         key,
@@ -514,19 +534,21 @@ def main(
 
 def train_fn(
     dataset: MultipleDomainDataset,
-    joint_train: torch.Tensor,
     train: ConcatDataset,
-    joint_calibration: torch.Tensor,
+    joint_train: torch.Tensor,
     calibration: ConcatDataset,
+    joint_calibration: torch.Tensor,
     train_fit_joint: bool,
     train_model: str,
     train_pretrained_path: Optional[Path],
     train_batch_size: int,
     train_epochs: int,
+    train_patience: int,
     train_tau: float,
     train_lr: float,
     calibration_batch_size: int,
     calibration_epochs: int,
+    calibration_patience: int,
     calibration_tau: float,
     calibration_lr: float,
     key: Any,
@@ -557,8 +579,8 @@ def train_fn(
     m.update(str(train_fit_joint).encode())
     m.update(train_model.encode())
     m.update(str(train_pretrained_path).encode())
-    m.update(str((train_batch_size, train_epochs, train_tau, train_lr)).encode())
-    m.update(str((calibration_batch_size, calibration_epochs, calibration_tau, calibration_lr)).encode())
+    m.update(str((train_batch_size, train_epochs, train_patience, train_tau, train_lr)).encode())
+    m.update(str((calibration_batch_size, calibration_epochs, train_patience, calibration_tau, calibration_lr)).encode())
     m.update(str(key).encode())
     hexdigest = m.hexdigest()
 
@@ -567,7 +589,7 @@ def train_fn(
     if restored is not state:
         print(f"Restoring checkpoint with {prefix = }")
 
-        # HACK: backward compatibility
+        # HACK: backward compatibility for legacy checkpoints
         prior = restored.prior.unfreeze()
         print('prior["source"]', prior["source"])
         prior["source"] = jnp.ones_like(prior["source"])
@@ -581,8 +603,6 @@ def train_fn(
 
     state: TrainState = replicate(state)
 
-    print("===> Training")
-    joint_train_jnp = replicate(jnp.asarray(joint_train.numpy()))
     train_loader = DataLoader(
         train,
         train_batch_size,
@@ -590,6 +610,21 @@ def train_fn(
         num_workers=num_workers,
         generator=generator,
     )
+    if len(calibration) or calibration_epochs:
+        calibration_loader = DataLoader(
+            calibration,
+            calibration_batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            generator=generator,
+        )
+    else:
+        calibration_loader = None
+
+    print("===> Training")
+    joint_train_jnp = replicate(jnp.asarray(joint_train.flatten().numpy()))
+    min_epoch_loss_valid = float('inf')
+    wait = 0
     for epoch in range(train_epochs):
         epoch_loss = 0
         epoch_hit = jnp.zeros(C * K, dtype=int)
@@ -613,24 +648,53 @@ def train_fn(
             epoch_hit += unreplicate(hit)
             epoch_total += unreplicate(total)
 
-        with jnp.printoptions(precision=3):
-            print(
-                f"Train epoch {epoch + 1}, loss: {epoch_loss}, hit: {epoch_hit}, total: {epoch_total}"
-            )
+        if calibration_loader is None:
+            with jnp.printoptions(precision=3):
+                print(
+                    f"Train epoch {epoch + 1}, loss: {epoch_loss}, hit: {epoch_hit}, total: {epoch_total}"
+                )
+        else:
+            epoch_loss_valid = 0
+            for X, _, Y, Z in calibration_loader:
+                if X.shape[0] < device_count:
+                    continue
+
+                remainder = X.shape[0] % device_count
+                X = X[remainder:]
+                Y = Y[remainder:]
+                Z = Z[remainder:]
+
+                X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
+                Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
+                Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
+                M = Y * K + Z
+
+                loss_valid = validation_step(state, X, M, K, train_fit_joint, train_tau, joint_train_jnp)
+                epoch_loss_valid += unreplicate(loss_valid)
+
+            with jnp.printoptions(precision=3):
+                print(
+                    f"Train epoch {epoch + 1}, loss: {epoch_loss} ({epoch_loss_valid}), hit: {epoch_hit}, total: {epoch_total}"
+                )
+
+            if epoch_loss_valid >= min_epoch_loss_valid:
+                wait += 1
+            else:
+                wait = 0
+                min_epoch_loss_valid = epoch_loss_valid
+
+            if wait > train_patience:
+                print(f"Early stopping! {train_patience = }, {min_epoch_loss_valid = }")
+                break
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
 
     print("===> Calibrating")
-    joint_calibration_jnp = replicate(jnp.asarray(joint_calibration.numpy()))
-    if len(calibration) or calibration_epochs:
-        calibration_loader = DataLoader(
-            calibration,
-            calibration_batch_size,
-            shuffle=True,
-            num_workers=num_workers,
-            generator=generator,
-        )
+    joint_calibration_jnp = replicate(jnp.asarray(joint_calibration.flatten().numpy()))
+    min_epoch_loss = float('inf')
+    wait = 0
+    if calibration_loader is not None:
         for epoch in range(calibration_epochs):
             epoch_loss = 0
             epoch_hit = jnp.zeros(C * K, dtype=int)
@@ -661,6 +725,16 @@ def train_fn(
                     f"Calibration epoch {epoch + 1}, loss: {epoch_loss}, hit: {epoch_hit}, total: {epoch_total}"
                 )
 
+            if epoch_loss >= min_epoch_loss:
+                wait += 1
+            else:
+                wait = 0
+                min_epoch_loss = epoch_loss
+
+            if wait > calibration_patience:
+                print(f"Early stopping! {calibration_patience = }, {min_epoch_loss = }")
+                break
+
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
 
@@ -675,7 +749,7 @@ def train_fn(
 def baseline_fn(
     state: TrainState,
     dataset: MultipleDomainDataset,
-    eval_splits: List[Tuple[torch.Tensor, Dataset]],
+    eval_splits: List[Tuple[Dataset, torch.Tensor]],
     dataset_label_noise: float,
     train_domains_set: Set[int],
     train_batch_size: int,
@@ -733,7 +807,7 @@ def adapt_fn(
     dataset_label_noise: float,
     train_domains_set: Set[int],
     calibration_domains_set: Set[int],
-    eval_splits: Sequence[Tuple[torch.Tensor, Dataset]],
+    eval_splits: Sequence[Tuple[Dataset, torch.Tensor]],
     adaptation: Adaptation,
     argmax_joint: bool,
     batch_size: int,
@@ -751,7 +825,7 @@ def adapt_fn(
     accuracy_sweep = jnp.empty(len(eval_splits))
     accuracy_Z_sweep = jnp.empty(len(eval_splits))
     norm_sweep = jnp.empty(len(eval_splits))
-    for i, (joint_M, eval_) in enumerate(eval_splits):
+    for i, (eval_, joint_M) in enumerate(eval_splits):
         # happens on the source domain when train_fraction = 1.0
         if len(eval_) == 0:
             mean_sweep = mean_sweep.at[i].set(jnp.nan)

@@ -77,32 +77,31 @@ paper-chexpert-embedding:
 		--joblog joblog-$@.txt \
 		pipenv run python3 \
 		-m tta.cli \
-		--config_name chexpert-embedding_{1}_{2}_domain{3}_size{4}_tau{5}_train{6}_cali{7}_prior{8} \
+		--config_name chexpert-embedding_{1}_{2}_domain{3}_size{4}_sub{5}_tau{6}_train{7}_cali{8}_prior{9} \
 		--dataset_name CheXpert \
 		--dataset_Y_column {1} \
 		--dataset_Z_column {2} \
 		--dataset_target_domain_count 512 \
 		--dataset_source_domain_count {4} \
+		--dataset_subsample_what {5} \
 		--dataset_use_embedding True \
 		--dataset_label_noise 0 \
 		--train_fit_joint True \
-		--train_epoch_means_step True \
 		--train_model Linear \
 		--train_domains {3} \
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
-		--train_epochs {6} \
-		--train_tau {5} \
+		--train_epochs {7} \
+		--train_patience 5 \
+		--train_tau {6} \
 		--train_lr 1e-3 \
 		--calibration_batch_size 64 \
-		--calibration_epochs {7} \
-		--calibration_tau {5} \
+		--calibration_epochs {8} \
+		--calibration_patience 5 \
+		--calibration_tau {6} \
 		--calibration_lr 1e-3 \
-		--adapt_gmtl_alpha 0.5 \
-		--adapt_gmtl_alpha 1 \
-		--adapt_gmtl_alpha 2 \
-		--adapt_prior_strength {8} \
+		--adapt_prior_strength {9} \
 		--adapt_symmetric_dirichlet False \
 		--adapt_fix_marginal False \
 		--test_argmax_joint False \
@@ -111,33 +110,27 @@ paper-chexpert-embedding:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert-embedding \
-		--plot_only True \
+		--plot_only False \
 		::: EFFUSION \
 		::: GENDER \
-		::: 1 10 \
+		::: 1 2 4 10 \
 		::: 65536 16384 4096 \
-		::: 1 0 \
-		::: 409500 \
-		::: 10200 \
+		::: none groups classes \
+		::: 0 1 \
+		::: 5000 \
+		::: 1000 \
 		::: 1
-	pipenv run python3 -m scripts.superpose \
-		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size65536_tau0_train409500_cali10200_prior1.npz \
-		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size65536_tau0_train409500_cali10200_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size16384_tau0_train409500_cali10200_prior1.npz \
-		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size16384_tau0_train409500_cali10200_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size4096_tau0_train409500_cali10200_prior1.npz \
-		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size4096_tau0_train409500_cali10200_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size65536_tau1_train409500_cali10200_prior1.npz \
-		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size65536_tau1_train409500_cali10200_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size16384_tau1_train409500_cali10200_prior1.npz \
-		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size16384_tau1_train409500_cali10200_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size4096_tau1_train409500_cali10200_prior1.npz \
-		--target npz/chexpert-embedding_EFFUSION_GENDER_domain1_size4096_tau1_train409500_cali10200_prior1.npz
+	for domain in 1 2 3 4 5 6 7 8 9; do \
+		for size in 65536 16384 4096; do \
+			for sub in none groups classes; do \
+				for tau in 0 1 ; do \
+					pipenv run python3 -m scripts.superpose \
+						--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size$${size}_sub$${sub}_tau$${tau}_train5000_cali1000_prior1.npz \
+						--target npz/chexpert-embedding_EFFUSION_GENDER_domain$${domain}_size$${size}_sub$${sub}_tau$${tau}_train5000_cali1000_prior1.npz; \
+				done \
+			done \
+		done \
+    done
 
 paper-chexpert-pixel:
 	parallel \

@@ -67,4 +67,4 @@ class MultipleDomainWaterbirds(MultipleDomainDataset):
             y_freq = y_count / len(domain)
             joint_M = y_freq[:, np.newaxis] * conditional
 
-            self.domains.append((joint_M, domain))
+            self.domains.append((domain, joint_M))

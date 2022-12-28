@@ -62,7 +62,7 @@ class MultipleDomainCXR(MultipleDomainDataset):
             reservation = np.ceil(target_domain_count * np.maximum(anchor1, anchor2).flatten())
             domain, in_sample_patients = self.sample(generator, datastore, labels, Y_col, Z_col, patient_col, mask, count, reservation)
             mask &= ~labels[patient_col].isin(in_sample_patients)
-            domains[i] = (joint_M, domain)
+            domains[i] = (domain, joint_M)
 
         remainder = np.sum(mask)
         if remainder < target_domain_count:
@@ -80,7 +80,7 @@ class MultipleDomainCXR(MultipleDomainDataset):
 
             print(f"histogram(M) = {count.flatten()}")
             domain, _ = self.sample(generator, datastore, labels, Y_col, Z_col, patient_col, mask, count, None)
-            domains[i] = (joint_M, domain)
+            domains[i] = (domain, joint_M)
 
         return domains
 

@@ -107,7 +107,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
             y_freq = y_count / len(labels)
             joint_M = y_freq[:, np.newaxis] * conditional
 
-            self.domains.append((joint_M, domain))
+            self.domains.append((domain, joint_M))
 
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         print(f'Saving cached datasets to {cache_file}')
