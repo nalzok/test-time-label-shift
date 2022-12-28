@@ -10,7 +10,9 @@ from tta.utils import Dataset, split_dataset
 
 
 class MultipleDomainDataset:
-    def __init__(self, input_shape, C, K, confounder_strength, train_domain, hexdigest) -> None:
+    def __init__(
+        self, input_shape, C, K, confounder_strength, train_domain, hexdigest
+    ) -> None:
         super().__init__()
 
         self.input_shape: Tuple[int] = input_shape
@@ -22,15 +24,18 @@ class MultipleDomainDataset:
         self.domains: List[Tuple[Dataset, torch.Tensor]] = []
 
 
-def split(dataset: MultipleDomainDataset, train_domains: Set[int], train_fraction: float, train_calibration_fraction: float,
-          calibration_domains: Set[int], calibration_fraction: float) \
-                  -> Tuple[
-                          Tuple[Dataset, torch.Tensor],
-                          Tuple[Dataset, torch.Tensor],
-                          List[
-                              Tuple[Dataset, torch.Tensor]
-                          ]
-                    ]:
+def split(
+    dataset: MultipleDomainDataset,
+    train_domains: Set[int],
+    train_fraction: float,
+    train_calibration_fraction: float,
+    calibration_domains: Set[int],
+    calibration_fraction: float,
+) -> Tuple[
+    Tuple[Dataset, torch.Tensor],
+    Tuple[Dataset, torch.Tensor],
+    List[Tuple[Dataset, torch.Tensor]],
+]:
     train_splits = []
     calibration_splits = []
     test_splits = []
@@ -38,15 +43,19 @@ def split(dataset: MultipleDomainDataset, train_domains: Set[int], train_fractio
     for i, (domain, joint_M) in enumerate(dataset.domains):
         if i in train_domains:
             # For source domains, we split it into train + calibration + test
-            train, test = split_dataset(domain, int(len(domain)*train_fraction))
-            calibration, train = split_dataset(train, int(len(domain)*train_calibration_fraction))
+            train, test = split_dataset(domain, int(len(domain) * train_fraction))
+            calibration, train = split_dataset(
+                train, int(len(domain) * train_calibration_fraction)
+            )
 
             train_splits.append(train)
             calibration_splits.append(calibration)
             test_splits.append((test, joint_M))
         elif i in calibration_domains:
             # For calibration domains, we split it into calibration + test
-            calibration, test = split_dataset(domain, int(len(domain)*calibration_fraction))
+            calibration, test = split_dataset(
+                domain, int(len(domain) * calibration_fraction)
+            )
 
             calibration_splits.append(calibration)
             test_splits.append((test, joint_M))
@@ -73,7 +82,12 @@ def split(dataset: MultipleDomainDataset, train_domains: Set[int], train_fractio
     return (train, joint_M_train), (calibration, joint_M_calibration), test_splits
 
 
-def subsample(dataset: Dataset, joint_M: torch.Tensor, subsample_what: str, generator: torch.Generator) -> Tuple[Dataset, torch.Tensor]:
+def subsample(
+    dataset: Dataset,
+    joint_M: torch.Tensor,
+    subsample_what: str,
+    generator: torch.Generator,
+) -> Tuple[Dataset, torch.Tensor]:
     joint_M_count = torch.zeros_like(joint_M, dtype=torch.long)
     M = []
     for _, _, y, z in dataset:
@@ -91,14 +105,18 @@ def subsample(dataset: Dataset, joint_M: torch.Tensor, subsample_what: str, gene
         indices_list = []
         for m in range(np.prod(joint_M_count.shape)):
             weights = (M == m).float()
-            indices_m = torch.multinomial(weights, count_per_group, replacement=False, generator=generator)
+            indices_m = torch.multinomial(
+                weights, count_per_group, replacement=False, generator=generator
+            )
             indices_list.extend(indices_m)
 
     elif subsample_what == "classes":
         indices_list = []
         for y in range(np.prod(joint_Y_count.shape)):
             weights = (Y == y).float()
-            indices_y = torch.multinomial(weights, count_per_class, replacement=False, generator=generator)
+            indices_y = torch.multinomial(
+                weights, count_per_class, replacement=False, generator=generator
+            )
             indices_list.extend(indices_y)
 
     else:
