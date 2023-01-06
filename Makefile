@@ -2,60 +2,58 @@
 
 paper: paper-mnist paper-chexpert
 
+
 paper-chexpert: paper-chexpert-embedding paper-chexpert-pixel
 
+
 paper-mnist:
-	parallel \
-		--jobs 1 \
-		--joblog joblog-$@.txt \
-		--dry-run \
-		pipenv run python3 \
-		-m tta.cli \
-		--config_name mnist_rot{1}_noise{2}_domain{3}_sub{4}_tau{5}_train{6}_cali{7}_prior{8} \
-		--dataset_name MNIST \
-		--dataset_apply_rotation {1} \
-		--dataset_subsample_what {4} \
-		--dataset_label_noise {2} \
-		--train_fit_joint True \
-		--train_model LeNet \
-		--train_domains {3} \
-		--train_fraction 0.9 \
-		--train_calibration_fraction 0.1 \
-		--train_batch_size 64 \
-		--train_epochs {6} \
-		--train_patience 5 \
-		--train_tau {5} \
-		--train_lr 1e-3 \
-		--calibration_batch_size 64 \
-		--calibration_epochs {7} \
-		--calibration_patience 5 \
-		--calibration_tau {5} \
-		--calibration_lr 1e-3 \
-		--adapt_prior_strength {8} \
-		--adapt_symmetric_dirichlet False \
-		--adapt_fix_marginal False \
-		--test_argmax_joint False \
-		--test_batch_size 64 \
-		--test_batch_size 512 \
-		--seed 2022 \
-		--num_workers 48 \
-		--plot_title ColoredMNIST \
-		--plot_only True \
-		::: False \
-		::: 0.025 0.1 0.4 \
-		::: 1 2 4 10 \
-		::: none groups classes \
-		::: 0 1 \
-		::: 5000 \
-		::: 1000 \
-		::: 1
-	for noise in 0.025 0.1 0.4; do \
-		for domain in 1 2 4; do \
-			for sub in none groups classes; do \
-				for tau in 0 1 ; do \
-					pipenv run python3 -m scripts.superpose \
-						--source npz/mnist_rotFalse_noise$${noise}_domain10_sub$${sub}_tau$${tau}_train5000_cali1000_prior1.npz \
-						--target npz/mnist_rotFalse_noise$${noise}_domain$${domain}_sub$${sub}_tau$${tau}_train5000_cali1000_prior1.npz; \
+	for rot in False; do \
+		for noise in 0.025 0.1 0.4; do \
+			for domain in 10 4 2 1; do \
+				for sub in none groups classes; do \
+					for tau in 0 1; do \
+						for train in 5000; do \
+							for cali in 1000; do \
+								for prior in 1; do \
+									pipenv run python3 \
+										-m tta.cli \
+										--config_name mnist_rot$${rot}_noise$${noise}_domain$${domain}_sub$${sub}_tau$${tau}_train$${train}_cali$${cali}_prior$${prior} \
+										--dataset_name MNIST \
+										--dataset_apply_rotation $${rot} \
+										--dataset_subsample_what $${sub} \
+										--dataset_label_noise $${noise} \
+										--train_fit_joint True \
+										--train_model LeNet \
+										--train_domains $${domain} \
+										--train_fraction 0.9 \
+										--train_calibration_fraction 0.1 \
+										--train_batch_size 64 \
+										--train_epochs $${train} \
+										--train_patience 5 \
+										--train_tau $${tau} \
+										--train_lr 1e-3 \
+										--calibration_batch_size 64 \
+										--calibration_epochs $${cali} \
+										--calibration_patience 5 \
+										--calibration_tau $${tau} \
+										--calibration_lr 1e-3 \
+										--adapt_prior_strength $${prior} \
+										--adapt_symmetric_dirichlet False \
+										--adapt_fix_marginal False \
+										--test_argmax_joint False \
+										--test_batch_size 64 \
+										--test_batch_size 512 \
+										--seed 2022 \
+										--num_workers 48 \
+										--plot_title ColoredMNIST \
+										--plot_only True; \
+								pipenv run python3 -m scripts.superpose \
+									--source npz/mnist_rot$${rot}_noise$${noise}_domain10_sub$${sub}_tau$${tau}_train$${train}_cali$${cali}_prior$${prior}.npz \
+									--target npz/mnist_rot$${rot}_noise$${noise}_domain$${domain}_sub$${sub}_tau$${tau}_train$${train}_cali$${cali}_prior$${prior}.npz; \
+								done \
+							done \
+						done \
+					done \
 				done \
 			done \
 		done \
@@ -63,66 +61,64 @@ paper-mnist:
 
 
 paper-chexpert-embedding:
-	parallel \
-		--eta \
-		--jobs 1 \
-		--joblog joblog-$@.txt \
-		pipenv run python3 \
-		-m tta.cli \
-		--config_name chexpert-embedding_{1}_{2}_domain{3}_size{4}_sub{5}_tau{6}_train{7}_cali{8}_prior{9} \
-		--dataset_name CheXpert \
-		--dataset_Y_column {1} \
-		--dataset_Z_column {2} \
-		--dataset_target_domain_count 512 \
-		--dataset_source_domain_count {4} \
-		--dataset_subsample_what {5} \
-		--dataset_use_embedding True \
-		--dataset_label_noise 0 \
-		--train_fit_joint True \
-		--train_model Linear \
-		--train_domains {3} \
-		--train_fraction 0.9 \
-		--train_calibration_fraction 0.1 \
-		--train_batch_size 64 \
-		--train_epochs {7} \
-		--train_patience 5 \
-		--train_tau {6} \
-		--train_lr 1e-3 \
-		--calibration_batch_size 64 \
-		--calibration_epochs {8} \
-		--calibration_patience 5 \
-		--calibration_tau {6} \
-		--calibration_lr 1e-3 \
-		--adapt_prior_strength {9} \
-		--adapt_symmetric_dirichlet False \
-		--adapt_fix_marginal False \
-		--test_argmax_joint False \
-		--test_batch_size 64 \
-		--test_batch_size 512 \
-		--seed 2022 \
-		--num_workers 48 \
-		--plot_title CheXpert-embedding \
-		--plot_only True \
-		::: EFFUSION \
-		::: GENDER \
-		::: 1 2 4 10 \
-		::: 65536 16384 4096 \
-		::: none groups classes \
-		::: 0 1 \
-		::: 5000 \
-		::: 1000 \
-		::: 1
-	for domain in 1 2 4; do \
-		for size in 65536 16384 4096; do \
-			for sub in none groups classes; do \
-				for tau in 0 1 ; do \
-					pipenv run python3 -m scripts.superpose \
-						--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size$${size}_sub$${sub}_tau$${tau}_train5000_cali1000_prior1.npz \
-						--target npz/chexpert-embedding_EFFUSION_GENDER_domain$${domain}_size$${size}_sub$${sub}_tau$${tau}_train5000_cali1000_prior1.npz; \
+	for Y_column in EFFUSION; do \
+		for Z_column in GENDER; do \
+			for domain in 10 4 2 1; do \
+				for size in 65536 16384 4096; do \
+					for sub in none groups classes; do \
+						for tau in 0 1; do \
+							for train in 5000; do \
+								for cali in 1000; do \
+									for prior in 1; do \
+										pipenv run python3 \
+											-m tta.cli \
+											--config_name chexpert-embedding_$${Y_column}_$${Z_column}_domain$${domain}_size$${size}_sub$${sub}_tau$${tau}_train$${train}_cali$${cali}_prior$${prior} \
+											--dataset_name CheXpert \
+											--dataset_Y_column $${Y_column} \
+											--dataset_Z_column $${Z_column} \
+											--dataset_target_domain_count 512 \
+											--dataset_source_domain_count $${size} \
+											--dataset_subsample_what $${sub} \
+											--dataset_use_embedding True \
+											--dataset_label_noise 0 \
+											--train_fit_joint True \
+											--train_model Linear \
+											--train_domains $${domain} \
+											--train_fraction 0.9 \
+											--train_calibration_fraction 0.1 \
+											--train_batch_size 64 \
+											--train_epochs $${train} \
+											--train_patience 5 \
+											--train_tau $${tau} \
+											--train_lr 1e-3 \
+											--calibration_batch_size 64 \
+											--calibration_epochs $${cali} \
+											--calibration_patience 5 \
+											--calibration_tau $${tau} \
+											--calibration_lr 1e-3 \
+											--adapt_prior_strength $${prior} \
+											--adapt_symmetric_dirichlet False \
+											--adapt_fix_marginal False \
+											--test_argmax_joint False \
+											--test_batch_size 64 \
+											--test_batch_size 512 \
+											--seed 2022 \
+											--num_workers 48 \
+											--plot_title CheXpert-embedding \
+											--plot_only True; \
+										pipenv run python3 -m scripts.superpose \
+											--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size$${size}_sub$${sub}_tau$${tau}_train5000_cali1000_prior1.npz \
+											--target npz/chexpert-embedding_EFFUSION_GENDER_domain$${domain}_size$${size}_sub$${sub}_tau$${tau}_train5000_cali1000_prior1.npz; \
+									done \
+								done \
+							done \
+						done \
+					done \
 				done \
 			done \
 		done \
     done
+
 
 paper-chexpert-pixel:
 	parallel \
