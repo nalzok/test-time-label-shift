@@ -6,14 +6,15 @@ paper-chexpert: paper-chexpert-embedding paper-chexpert-pixel
 
 paper-mnist:
 	parallel \
-		--eta \
 		--jobs 1 \
 		--joblog joblog-$@.txt \
+		--dry-run \
 		pipenv run python3 \
 		-m tta.cli \
-		--config_name mnist_rot{1}_noise{2}_domain{3}_train{4}_cali{5}_prior{6} \
+		--config_name mnist_rot{1}_noise{2}_domain{3}_sub{4}_tau{5}_train{6}_cali{7}_prior{8} \
 		--dataset_name MNIST \
 		--dataset_apply_rotation {1} \
+		--dataset_subsample_what {4} \
 		--dataset_label_noise {2} \
 		--train_fit_joint True \
 		--train_model LeNet \
@@ -21,12 +22,16 @@ paper-mnist:
 		--train_fraction 0.9 \
 		--train_calibration_fraction 0.1 \
 		--train_batch_size 64 \
-		--train_epochs {4} \
+		--train_epochs {6} \
+		--train_patience 5 \
+		--train_tau {5} \
 		--train_lr 1e-3 \
 		--calibration_batch_size 64 \
-		--calibration_epochs {5} \
+		--calibration_epochs {7} \
+		--calibration_patience 5 \
+		--calibration_tau {5} \
 		--calibration_lr 1e-3 \
-		--adapt_prior_strength {6} \
+		--adapt_prior_strength {8} \
 		--adapt_symmetric_dirichlet False \
 		--adapt_fix_marginal False \
 		--test_argmax_joint False \
@@ -35,40 +40,27 @@ paper-mnist:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title ColoredMNIST \
-		--plot_only False \
+		--plot_only True \
 		::: False \
-		::: 0.1 \
-		::: 10 9 8 7 6 5 4 3 2 1 \
-		::: 500 \
-		::: 100 \
+		::: 0.025 0.1 0.4 \
+		::: 1 2 4 10 \
+		::: none groups classes \
+		::: 0 1 \
+		::: 5000 \
+		::: 1000 \
 		::: 1
-	pipenv run python3 -m scripts.superpose \
-		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
-		--target npz/mnist_rotFalse_noise0.1_domain9_train500_cali100_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
-		--target npz/mnist_rotFalse_noise0.1_domain8_train500_cali100_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
-		--target npz/mnist_rotFalse_noise0.1_domain7_train500_cali100_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
-		--target npz/mnist_rotFalse_noise0.1_domain6_train500_cali100_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
-		--target npz/mnist_rotFalse_noise0.1_domain5_train500_cali100_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
-		--target npz/mnist_rotFalse_noise0.1_domain4_train500_cali100_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
-		--target npz/mnist_rotFalse_noise0.1_domain3_train500_cali100_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
-		--target npz/mnist_rotFalse_noise0.1_domain2_train500_cali100_prior1.npz
-	pipenv run python3 -m scripts.superpose \
-		--source npz/mnist_rotFalse_noise0.1_domain10_train500_cali100_prior1.npz \
-		--target npz/mnist_rotFalse_noise0.1_domain1_train500_cali100_prior1.npz
+	for noise in 0.025 0.1 0.4; do \
+		for domain in 1 2 4; do \
+			for sub in none groups classes; do \
+				for tau in 0 1 ; do \
+					pipenv run python3 -m scripts.superpose \
+						--source npz/mnist_rotFalse_noise$${noise}_domain10_sub$${sub}_tau$${tau}_train5000_cali1000_prior1.npz \
+						--target npz/mnist_rotFalse_noise$${noise}_domain$${domain}_sub$${sub}_tau$${tau}_train5000_cali1000_prior1.npz; \
+				done \
+			done \
+		done \
+    done
+
 
 paper-chexpert-embedding:
 	parallel \
@@ -110,7 +102,7 @@ paper-chexpert-embedding:
 		--seed 2022 \
 		--num_workers 48 \
 		--plot_title CheXpert-embedding \
-		--plot_only False \
+		--plot_only True \
 		::: EFFUSION \
 		::: GENDER \
 		::: 1 2 4 10 \
@@ -120,7 +112,7 @@ paper-chexpert-embedding:
 		::: 5000 \
 		::: 1000 \
 		::: 1
-	for domain in 1 2 3 4 5 6 7 8 9; do \
+	for domain in 1 2 4; do \
 		for size in 65536 16384 4096; do \
 			for sub in none groups classes; do \
 				for tau in 0 1 ; do \
