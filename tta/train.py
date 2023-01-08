@@ -166,6 +166,20 @@ def calibration_step(state: TrainState, X: jnp.ndarray, M: jnp.ndarray, K: int,
 cross_replica_mean: Callable = jax.pmap(lambda x: jax.lax.pmean(x, 'batch'), 'batch')
 
 
+@partial(jax.pmap, axis_name='batch')
+def induce_step(state: TrainState, X: jnp.ndarray) -> jnp.ndarray:
+    variables = {
+        'params': state.params,
+        'batch_stats': state.batch_stats,
+        'prior': state.prior
+    }
+    logit = state.calibrated_fn(variables, X, False)
+    prob = jax.nn.softmax(logit)
+    prob_sum = jax.lax.psum(jnp.sum(prob, axis=0), axis_name='batch')
+
+    return prob_sum
+
+
 # @partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3, 4, 5, 6), donate_argnums=(0,))
 @partial(jax.pmap, axis_name='batch', static_broadcasted_argnums=(3, 4, 5, 6))
 def adapt_step(state: TrainState, X: jnp.ndarray, prior_strength: float,
