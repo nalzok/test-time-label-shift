@@ -55,6 +55,7 @@ from tta.visualize import latexify, plot
 @click.option("--dataset_subsample_what", type=str, required=True)
 @click.option("--dataset_use_embedding", type=bool, required=False)
 @click.option("--dataset_apply_rotation", type=bool, required=False)
+@click.option("--dataset_feature_noise", type=float, required=True)
 @click.option("--dataset_label_noise", type=float, required=True)
 @click.option("--train_fit_joint", type=bool, required=True)
 @click.option("--train_model", type=str, required=True)
@@ -66,6 +67,7 @@ from tta.visualize import latexify, plot
 @click.option("--train_calibration_fraction", type=float, required=True)
 @click.option("--train_batch_size", type=int, required=True)
 @click.option("--train_epochs", type=int, required=True)
+@click.option("--train_decay", type=float, required=True)
 @click.option("--train_patience", type=int, required=True)
 @click.option("--train_tau", type=float, required=True)
 @click.option("--train_lr", type=float, required=True)
@@ -73,6 +75,7 @@ from tta.visualize import latexify, plot
 @click.option("--calibration_fraction", type=float, required=False)
 @click.option("--calibration_batch_size", type=int, required=True)
 @click.option("--calibration_epochs", type=int, required=True)
+@click.option("--calibration_decay", type=float, required=True)
 @click.option("--calibration_patience", type=int, required=True)
 @click.option("--calibration_tau", type=float, required=True)
 @click.option("--calibration_lr", type=float, required=True)
@@ -98,6 +101,7 @@ def cli(
     dataset_subsample_what: str,
     dataset_use_embedding: Optional[bool],
     dataset_apply_rotation: Optional[bool],
+    dataset_feature_noise: float,
     dataset_label_noise: float,
     train_fit_joint: bool,
     train_model: str,
@@ -107,6 +111,7 @@ def cli(
     train_calibration_fraction: float,
     train_batch_size: int,
     train_epochs: int,
+    train_decay: float,
     train_patience: int,
     train_tau: float,
     train_lr: float,
@@ -114,6 +119,7 @@ def cli(
     calibration_fraction: Optional[float],
     calibration_batch_size: int,
     calibration_epochs: int,
+    calibration_decay: float,
     calibration_patience: int,
     calibration_tau: float,
     calibration_lr: float,
@@ -137,7 +143,8 @@ def cli(
     plot_root.mkdir(parents=True, exist_ok=True)
 
     log_path = log_root / f"{config_name}.txt"
-    sys.stdout = Tee(log_path)
+    if not plot_only:
+        sys.stdout = Tee(log_path)
     npz_path = npz_root / f"{config_name}.npz"
 
     random.seed(seed)
@@ -162,6 +169,7 @@ def cli(
         dataset_subsample_what,
         dataset_use_embedding,
         dataset_apply_rotation,
+        dataset_feature_noise,
         dataset_label_noise,
         train_domains,
         train_fraction,
@@ -188,11 +196,13 @@ def cli(
             train_pretrained_path,
             train_batch_size,
             train_epochs,
+            train_decay,
             train_patience,
             train_tau,
             train_lr,
             calibration_batch_size,
             calibration_epochs,
+            calibration_decay,
             calibration_patience,
             calibration_tau,
             calibration_lr,
@@ -227,6 +237,7 @@ def prepare_dataset(
     dataset_subsample_what: str,
     dataset_use_embedding: Optional[bool],
     dataset_apply_rotation: Optional[bool],
+    dataset_feature_noise: float,
     dataset_label_noise: float,
     train_domains: str,
     train_fraction: float,
@@ -271,6 +282,7 @@ def prepare_dataset(
             train_domains_set,
             generator,
             dataset_apply_rotation,
+            dataset_feature_noise,
             dataset_label_noise,
         )
     elif dataset_name == "COCO":
@@ -280,6 +292,7 @@ def prepare_dataset(
         assert dataset_source_domain_count is None
         assert dataset_use_embedding is None
         assert dataset_apply_rotation is None
+        assert dataset_feature_noise == 0
         assert dataset_label_noise == 0
 
         root = Path("data/COCO/train2017")
@@ -292,6 +305,7 @@ def prepare_dataset(
         assert dataset_source_domain_count is None
         assert dataset_use_embedding is None
         assert dataset_apply_rotation is None
+        assert dataset_feature_noise == 0
         assert dataset_label_noise == 0
 
         root = Path("data/")
@@ -302,6 +316,7 @@ def prepare_dataset(
         assert dataset_target_domain_count is not None
         assert dataset_use_embedding is not None
         assert dataset_apply_rotation is None
+        assert dataset_feature_noise == 0
         assert dataset_label_noise == 0
 
         root = Path("data/CheXpert")
@@ -321,6 +336,7 @@ def prepare_dataset(
         assert dataset_target_domain_count is not None
         assert dataset_use_embedding is True
         assert dataset_apply_rotation is None
+        assert dataset_feature_noise == 0
         assert dataset_label_noise == 0
 
         root = Path("data/MIMIC")
@@ -402,11 +418,13 @@ def main(
     train_pretrained_path: Optional[Path],
     train_batch_size: int,
     train_epochs: int,
+    train_decay: float,
     train_patience: int,
     train_tau: float,
     train_lr: float,
     calibration_batch_size: int,
     calibration_epochs: int,
+    calibration_decay: float,
     calibration_patience: int,
     calibration_tau: float,
     calibration_lr: float,
@@ -443,11 +461,13 @@ def main(
         train_pretrained_path,
         train_batch_size,
         train_epochs,
+        train_decay,
         train_patience,
         train_tau,
         train_lr,
         calibration_batch_size,
         calibration_epochs,
+        calibration_decay,
         calibration_patience,
         calibration_tau,
         calibration_lr,
@@ -544,11 +564,13 @@ def train_fn(
     train_pretrained_path: Optional[Path],
     train_batch_size: int,
     train_epochs: int,
+    train_decay: float,
     train_patience: int,
     train_tau: float,
     train_lr: float,
     calibration_batch_size: int,
     calibration_epochs: int,
+    calibration_decay: float,
     calibration_patience: int,
     calibration_tau: float,
     calibration_lr: float,
@@ -580,8 +602,10 @@ def train_fn(
     m.update(str(train_fit_joint).encode())
     m.update(train_model.encode())
     m.update(str(train_pretrained_path).encode())
-    m.update(str((train_batch_size, train_epochs, train_patience, train_tau, train_lr)).encode())
-    m.update(str((calibration_batch_size, calibration_epochs, train_patience, calibration_tau, calibration_lr)).encode())
+    train_key = (train_batch_size, train_epochs, train_decay, train_patience, train_tau, train_lr)
+    m.update(str(train_key).encode())
+    calibration_key = (calibration_batch_size, calibration_epochs, calibration_decay, calibration_patience, calibration_tau, calibration_lr)
+    m.update(str(calibration_key).encode())
     m.update(str(key).encode())
     hexdigest = m.hexdigest()
 
@@ -624,7 +648,8 @@ def train_fn(
 
     print("===> Training")
     joint_train_jnp = replicate(jnp.asarray(joint_train.flatten().numpy()))
-    min_epoch_loss_valid = float('inf')
+    epoch_loss_valid_ema = None
+    min_epoch_loss_valid_ema = float('inf')
     wait = 0
     for epoch in range(train_epochs):
         epoch_loss = 0
@@ -654,46 +679,54 @@ def train_fn(
                 print(
                     f"Train epoch {epoch + 1}, loss: {epoch_loss}, hit: {epoch_hit}, total: {epoch_total}"
                 )
+
+            continue
+
+        epoch_loss_valid = 0
+        for X, _, Y, Z in calibration_loader:
+            if X.shape[0] < device_count:
+                continue
+
+            remainder = X.shape[0] % device_count
+            X = X[remainder:]
+            Y = Y[remainder:]
+            Z = Z[remainder:]
+
+            X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
+            Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
+            Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
+            M = Y * K + Z
+
+            loss_valid = validation_step(state, X, M, K, train_fit_joint, train_tau, joint_train_jnp)
+            epoch_loss_valid += unreplicate(loss_valid)
+
+        if epoch_loss_valid_ema is None:
+            epoch_loss_valid_ema = epoch_loss_valid
         else:
-            epoch_loss_valid = 0
-            for X, _, Y, Z in calibration_loader:
-                if X.shape[0] < device_count:
-                    continue
+            epoch_loss_valid_ema = (1 - train_decay) * epoch_loss_valid_ema + train_decay * epoch_loss_valid
 
-                remainder = X.shape[0] % device_count
-                X = X[remainder:]
-                Y = Y[remainder:]
-                Z = Z[remainder:]
+        with jnp.printoptions(precision=3):
+            print(
+                f"Train epoch {epoch + 1}, loss: {epoch_loss:.2f} (val: {epoch_loss_valid:.2f}, ema: {epoch_loss_valid_ema:.2f}), hit: {epoch_hit}, total: {epoch_total}"
+            )
 
-                X = jnp.array(X).reshape(device_count, -1, *X.shape[1:])
-                Y = jnp.array(Y).reshape(device_count, -1, *Y.shape[1:])
-                Z = jnp.array(Z).reshape(device_count, -1, *Z.shape[1:])
-                M = Y * K + Z
+        if epoch_loss_valid >= min_epoch_loss_valid_ema:
+            wait += 1
+        else:
+            wait = 0
+            min_epoch_loss_valid_ema = epoch_loss_valid_ema
 
-                loss_valid = validation_step(state, X, M, K, train_fit_joint, train_tau, joint_train_jnp)
-                epoch_loss_valid += unreplicate(loss_valid)
-
-            with jnp.printoptions(precision=3):
-                print(
-                    f"Train epoch {epoch + 1}, loss: {epoch_loss} ({epoch_loss_valid}), hit: {epoch_hit}, total: {epoch_total}"
-                )
-
-            if epoch_loss_valid >= min_epoch_loss_valid:
-                wait += 1
-            else:
-                wait = 0
-                min_epoch_loss_valid = epoch_loss_valid
-
-            if wait > train_patience:
-                print(f"Early stopping! {train_patience = }, {min_epoch_loss_valid = }")
-                break
+        if wait > train_patience:
+            print(f"Early stopping! {train_decay = }, {train_patience = }, {min_epoch_loss_valid_ema = }")
+            break
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.
     state = state.replace(batch_stats=cross_replica_mean(state.batch_stats))
 
     print("===> Calibrating")
     joint_calibration_jnp = replicate(jnp.asarray(joint_calibration.flatten().numpy()))
-    min_epoch_loss = float('inf')
+    epoch_loss_ema = None
+    min_epoch_loss_ema = float('inf')
     wait = 0
     if calibration_loader is not None:
         for epoch in range(calibration_epochs):
@@ -721,19 +754,24 @@ def train_fn(
                 epoch_hit += unreplicate(hit)
                 epoch_total += unreplicate(total)
 
+            if epoch_loss_ema is None:
+                epoch_loss_ema = epoch_loss
+            else:
+                epoch_loss_ema = (1 - calibration_decay) * epoch_loss_ema + calibration_decay * epoch_loss
+
             with jnp.printoptions(precision=3):
                 print(
-                    f"Calibration epoch {epoch + 1}, loss: {epoch_loss}, hit: {epoch_hit}, total: {epoch_total}"
+                    f"Calibration epoch {epoch + 1}, loss: {epoch_loss:.2f} (ema: {epoch_loss_ema:.2f}), hit: {epoch_hit}, total: {epoch_total}"
                 )
 
-            if epoch_loss >= min_epoch_loss:
+            if epoch_loss_ema >= min_epoch_loss_ema:
                 wait += 1
             else:
                 wait = 0
-                min_epoch_loss = epoch_loss
+                min_epoch_loss_ema = epoch_loss_ema
 
             if wait > calibration_patience:
-                print(f"Early stopping! {calibration_patience = }, {min_epoch_loss = }")
+                print(f"Early stopping! {calibration_decay = }, {calibration_patience = }, {min_epoch_loss_ema = }")
                 break
 
     # Sync the batch statistics across replicas so that evaluation is deterministic.

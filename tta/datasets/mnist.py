@@ -14,7 +14,7 @@ from tta.datasets import MultipleDomainDataset
 
 class MultipleDomainMNIST(MultipleDomainDataset):
 
-    def __init__(self, root, train_domains, generator, apply_rotation: bool, label_noise: float):
+    def __init__(self, root, train_domains, generator, apply_rotation: bool, feature_noise: float, label_noise: float):
         if len(train_domains) != 1:
             raise NotImplementedError(
                 "Training on multiple source distributions is not supported yet."
@@ -41,6 +41,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
         m.update(str(sorted(train_domains)).encode())
         m.update(generator.get_state().numpy().data.hex().encode())
         m.update(str(apply_rotation).encode())
+        m.update(str(feature_noise).encode())
         m.update(str(label_noise).encode())
         m.update(self.colors.numpy().data.hex().encode())
         m.update(self.angles.numpy().data.hex().encode())
@@ -54,7 +55,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
         super().__init__(input_shape, C, K, confounder_strength, train_domain, hexdigest)
 
-        cache_key = f'{train_domain}_{apply_rotation}_{label_noise}_{hexdigest}'
+        cache_key = f'{train_domain}_{apply_rotation}_{feature_noise}_{label_noise}_{hexdigest}'
         cache_file = root / 'cached' / f'{cache_key}.pt'
         if cache_file.is_file():
             # NOTE: The torch.Generator state won't be the same if we load from cache
@@ -68,6 +69,7 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
         self.generator = generator
         self.train_domains = train_domains
+        self.feature_noise = feature_noise
         self.label_noise = label_noise
 
         original_dataset_tr = MNIST(root, train=True, download=True)
@@ -145,6 +147,9 @@ class MultipleDomainMNIST(MultipleDomainDataset):
             image = image.rotate(angle.item(), resample=Image.BILINEAR)
             image = to_tensor(image)
             image = image.permute(1, 2, 0)
+
+            noise = self.feature_noise * torch.randn(image.size(), generator=self.generator)
+            image = torch.clamp(image + noise, 0, 1)
 
             x[i] = image
 
