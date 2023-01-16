@@ -293,5 +293,7 @@ joblog*.txt
 logs/**.txt
 plots/**.png
 plots/**.pdf
+merged/**.png
+merged/**.pdf
 npz/**.npz
 checkpoints/**

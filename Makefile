@@ -9,7 +9,7 @@ paper-chexpert: paper-chexpert-embedding paper-chexpert-pixel
 paper-mnist:
 	for rot in False; do \
 		for noise in 0; do \
-			for domain in 10 4 1; do \
+			for domain in 1 2 4 10; do \
 				for sub in none groups classes; do \
 					for tau in 0 1; do \
 						for train in 5000; do \
@@ -50,9 +50,6 @@ paper-mnist:
 										--num_workers 48 \
 										--plot_title ColoredMNIST \
 										--plot_only False; \
-								pipenv run python3 -m scripts.superpose \
-									--source npz/mnist_rot$${rot}_noise$${noise}_domain10_sub$${sub}_tau$${tau}_train$${train}_cali$${cali}_prior$${prior}.npz \
-									--target npz/mnist_rot$${rot}_noise$${noise}_domain$${domain}_sub$${sub}_tau$${tau}_train$${train}_cali$${cali}_prior$${prior}.npz; \
 								done \
 							done \
 						done \
@@ -66,13 +63,13 @@ paper-mnist:
 paper-chexpert-embedding:
 	for Y_column in EFFUSION; do \
 		for Z_column in GENDER; do \
-			for domain in 10 1; do \
+			for domain in 1 2 4 10; do \
 				for size in 65536; do \
 					for sub in none groups classes; do \
 						for tau in 0 1; do \
 							for train in 5000; do \
-								for cali in 1000; do \
-									for prior in 1; do \
+								for cali in 0 1000; do \
+									for prior in 0; do \
 										pipenv run python3 \
 											-m tta.cli \
 											--config_name chexpert-embedding_$${Y_column}_$${Z_column}_domain$${domain}_size$${size}_sub$${sub}_tau$${tau}_train$${train}_cali$${cali}_prior$${prior} \
@@ -111,10 +108,7 @@ paper-chexpert-embedding:
 											--seed 2022 \
 											--num_workers 48 \
 											--plot_title CheXpert-embedding \
-											--plot_only True; \
-										pipenv run python3 -m scripts.superpose \
-											--source npz/chexpert-embedding_EFFUSION_GENDER_domain10_size$${size}_sub$${sub}_tau$${tau}_train5000_cali1000_prior1.npz \
-											--target npz/chexpert-embedding_EFFUSION_GENDER_domain$${domain}_size$${size}_sub$${sub}_tau$${tau}_train5000_cali1000_prior1.npz; \
+											--plot_only False; \
 									done \
 								done \
 							done \
