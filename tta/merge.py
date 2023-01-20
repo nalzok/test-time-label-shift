@@ -28,7 +28,7 @@ def merge(
     merged_root.mkdir(parents=True, exist_ok=True)
 
     npz_dict = {}
-    for npz_path in npz_root.glob(npz_pattern):
+    for npz_path in sorted(npz_root.glob(npz_pattern)):
         npz = np.load(npz_path)
         print(f"Reading from {npz_path}")
         npz = np.load(npz_path, allow_pickle=True)
