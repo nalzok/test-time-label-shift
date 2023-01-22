@@ -106,6 +106,7 @@ class MultipleDomainMIMIC(MultipleDomainCXR):
 
         self.domains = self.build(generator, datastore, labels, Y_col, Z_col, patient_col, target_domain_count, source_domain_count)
 
-        cache_file.parent.mkdir(parents=True, exist_ok=True)
-        print(f'Saving cached datasets to {cache_file}')
-        torch.save(self.domains, cache_file)
+        if use_embedding:
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            print(f'Saving cached datasets to {cache_file}')
+            torch.save(self.domains, cache_file)
