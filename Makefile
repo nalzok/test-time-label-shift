@@ -1,4 +1,4 @@
-.PHONY: paper paper-chexpert paper-mnist paper-chexpert-embedding paper-chexpert-pixel baseline manova tree
+.PHONY: paper paper-chexpert paper-mnist paper-chexpert-embedding paper-chexpert-pixel baseline manova tree merge
 
 paper: paper-mnist paper-chexpert
 
@@ -107,8 +107,8 @@ paper-chexpert-embedding:
 											--test_batch_size 512 \
 											--seed 2022 \
 											--num_workers 48 \
-											--plot_title CheXpert-embedding \
-											--plot_only False; \
+											--plot_title "" \
+											--plot_only True; \
 									done \
 								done \
 							done \
@@ -244,11 +244,59 @@ paper-mimic-embedding:
 data/CheXpert/data_matrix.npz:
 	pipenv run python3 -m scripts.matching
 
+
 baseline: data/CheXpert/data_matrix.npz
 	pipenv run python3 -m scripts.baseline
+
 
 manova:
 	pipenv run python3 -m scripts.manova
 
+
 tree:
 	pipenv run python3 -m scripts.tree
+
+
+merge:
+	for noise in 0 0.5 1; do \
+		for domain in 1; do \
+			for cali in 0 1000; do \
+				env JAX_PLATFORMS="" \
+					pipenv run python3 \
+						-m scripts.merge \
+						--npz_pattern "mnist_rotFalse_noise$${noise}_domain$${domain}_*train5000_cali$${cali}_prior0.npz" \
+						--merged_title "" \
+						--merged_name "mnist-domain$${domain}-noise$${noise}-cali$${cali}"; \
+			done \
+		done \
+	done
+	for domain in 1; do \
+		for cali in 0 1000; do \
+			env JAX_PLATFORMS="" \
+				pipenv run python3 \
+					-m scripts.merge \
+					--npz_pattern "chexpert-embedding_EFFUSION_GENDER_domain$${domain}_size65536_*train5000_cali$${cali}_prior0.npz" \
+					--merged_title "" \
+					--merged_name "chexpert-embedding-domain$${domain}-cali$${cali}"; \
+		done \
+    done
+	for domain in 1; do \
+		for cali in 0 1000; do \
+			env JAX_PLATFORMS="" \
+				pipenv run python3 \
+					-m scripts.merge \
+					--npz_pattern "chexpert-pixel_EFFUSION_GENDER_domain$${domain}_size65536_*train5000_cali$${cali}_prior0.npz" \
+					--merged_title "" \
+					--merged_name "chexpert-pixel-domain$${domain}-cali$${cali}"; \
+		done \
+    done
+	for domain in 1; do \
+		for cali in 0 1000; do \
+			env JAX_PLATFORMS="" \
+				pipenv run python3 \
+					-m scripts.merge \
+					--npz_pattern "mimic-embedding_Pneumonia_gender_domain$${domain}_size23290_*train5000_cali$${cali}_prior0.npz" \
+					--merged_title "" \
+					--merged_name "mimic-embedding-domain$${domain}-cali$${cali}"; \
+		done \
+    done

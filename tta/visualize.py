@@ -131,7 +131,7 @@ def plot(
         if sweep_type in {"mean", "l1", "norm"}:
             plt.ylim((0, 1))
         else:
-            plt.ylim((0.95, 1))
+            plt.ylim((0.5, 1))
 
         plt.xlabel("Shift parameter")
         plt.ylabel(ylabel)
