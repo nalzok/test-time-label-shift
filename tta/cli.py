@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from typing import Any, Sequence, List, Tuple, Set, Optional, Dict
 from pathlib import Path
 from hashlib import sha256
@@ -153,33 +154,53 @@ def cli(
     key = jax.random.PRNGKey(seed)
     generator = torch.Generator().manual_seed(seed)
 
-    (
-        dataset,
-        (train, joint_train),
-        (calibration, joint_calibration),
-        eval_splits,
-        train_domains_set,
-        calibration_domains_set,
-    ) = prepare_dataset(
-        dataset_name,
-        dataset_y_column,
-        dataset_z_column,
-        dataset_target_domain_count,
-        dataset_source_domain_count,
-        dataset_subsample_what,
-        dataset_use_embedding,
-        dataset_apply_rotation,
-        dataset_feature_noise,
-        dataset_label_noise,
-        train_domains,
-        train_fraction,
-        train_calibration_fraction,
-        calibration_domains,
-        calibration_fraction,
-        generator,
-    )
 
-    if not plot_only:
+    train_domains_set = set(int(env) for env in train_domains.split(","))
+    if len(train_domains_set) != 1:
+        raise NotImplementedError(
+            "Training on multiple source distributions is not supported yet."
+        )
+
+    if calibration_domains is None:
+        calibration_domains_set = set()
+    else:
+        calibration_domains_set = set(
+            int(env) for env in calibration_domains.split(",")
+        )
+
+    if calibration_fraction is None:
+        calibration_fraction = 1.0
+
+
+    if plot_only:
+        # Ugly hack
+        confounder_strength = np.linspace(0, 1, 21)
+        dataset = SimpleNamespace(confounder_strength=confounder_strength)
+    else:
+        (
+            dataset,
+            (train, joint_train),
+            (calibration, joint_calibration),
+            eval_splits,
+        ) = prepare_dataset(
+            dataset_name,
+            dataset_y_column,
+            dataset_z_column,
+            dataset_target_domain_count,
+            dataset_source_domain_count,
+            dataset_subsample_what,
+            dataset_use_embedding,
+            dataset_apply_rotation,
+            dataset_feature_noise,
+            dataset_label_noise,
+            train_domains_set,
+            train_fraction,
+            train_calibration_fraction,
+            calibration_domains_set,
+            calibration_fraction,
+            generator,
+        )
+
         main(
             npz_path,
             dataset,
@@ -239,35 +260,18 @@ def prepare_dataset(
     dataset_apply_rotation: Optional[bool],
     dataset_feature_noise: float,
     dataset_label_noise: float,
-    train_domains: str,
+    train_domains_set: Set[int],
     train_fraction: float,
     train_calibration_fraction: float,
-    calibration_domains: Optional[str],
-    calibration_fraction: Optional[float],
+    calibration_domains_set: Set[int],
+    calibration_fraction: float,
     generator: torch.Generator,
 ) -> Tuple[
     MultipleDomainDataset,
     Tuple[Dataset, torch.Tensor],
     Tuple[Dataset, torch.Tensor],
     List[Tuple[Dataset, torch.Tensor]],
-    Set[int],
-    Set[int],
 ]:
-    train_domains_set = set(int(env) for env in train_domains.split(","))
-    if len(train_domains_set) != 1:
-        raise NotImplementedError(
-            "Training on multiple source distributions is not supported yet."
-        )
-
-    if calibration_domains is not None:
-        calibration_domains_set = set(
-            int(env) for env in calibration_domains.split(",")
-        )
-    else:
-        calibration_domains_set = set()
-    if calibration_fraction is None:
-        calibration_fraction = 1.0
-
     if dataset_name == "MNIST":
         assert dataset_y_column is None
         assert dataset_z_column is None
@@ -397,8 +401,6 @@ def prepare_dataset(
         (train, joint_train),
         (calibration, joint_calibration),
         eval_splits,
-        train_domains_set,
-        calibration_domains_set,
     )
 
 
