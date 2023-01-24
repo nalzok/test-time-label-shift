@@ -122,7 +122,7 @@ def make_auc_sweeps(dataset, train_domains_set, prior_strength):
     auc_sweeps = {}
 
     alpha = prior_strength * 4 * source
-    for i, (target_oracle, test) in enumerate(test_splits):
+    for i, (test, target_oracle) in enumerate(test_splits):
         target_oracle = target_oracle.numpy().flatten()
         X, Y, _, Z = dataset2np(test)
         M = Y * 2 + Z

@@ -58,7 +58,7 @@ def key(path: Path) -> Tuple[int, int, float]:
 
 def parse(config: str) -> Tuple[int, str, float]:
     if config.startswith("mnist_"):
-        pattern = re.compile(r"mnist_rot(True|False)_noise(\d*\.?\d*)_domain(\d+)_sub(none|classes|groups)_tau(\d*\.?\d*)_train(\d+)_cali(\d+)_prior(\d*\.?\d*)")
+        pattern = re.compile(r"mnist_rot(True|False)_noise(\d*\.?\d*)_domain(\d+)_sub(none|classes|groups)_tau(\d*\.?\d*)_train(\d+)_cali(\d+)_prior(\d*\.?\d*)_seed(\d*\.?\d*)")
         matching = pattern.fullmatch(config)
         assert matching is not None
 
@@ -70,9 +70,10 @@ def parse(config: str) -> Tuple[int, str, float]:
         train = int(matching.group(6))
         cali = int(matching.group(7))
         prior = float(matching.group(8))
+        seed = int(matching.group(9))
 
     elif config.startswith("chexpert-") or config.startswith("mimic-"):
-        pattern = re.compile(r"(chexpert|mimic)-(embedding|pixel)_([a-zA-Z]+)_([a-zA-Z]+)_domain(\d+)_size(\d+)_sub(none|classes|groups)_tau(\d*\.?\d*)_train(\d+)_cali(\d+)_prior(\d*\.?\d*)")
+        pattern = re.compile(r"(chexpert|mimic)-(embedding|pixel)_([a-zA-Z]+)_([a-zA-Z]+)_domain(\d+)_size(\d+)_sub(none|classes|groups)_tau(\d*\.?\d*)_train(\d+)_cali(\d+)_prior(\d*\.?\d*)_seed(\d*\.?\d*)")
         matching = pattern.fullmatch(config)
         assert matching is not None
 
@@ -87,6 +88,7 @@ def parse(config: str) -> Tuple[int, str, float]:
         train = int(matching.group(9))
         cali = int(matching.group(10))
         prior = float(matching.group(11))
+        seed = int(matching.group(12))
 
     else:
         raise ValueError(f"Unknown config {config}")

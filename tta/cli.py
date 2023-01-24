@@ -1068,12 +1068,10 @@ def adapt_fn(
                     K,
                 )
                 prior = unreplicate(state.prior["target"]).reshape((C, K))
-                print("prior", prior)
             else:
                 raise ValueError(f"Unknown adaptation scheme {adaptation}")
 
             (score, hit), (score_Z, hit_Z) = test_step(state, X, Y, Z, argmax_joint)
-            print("score", score.flatten())
 
             mean += jnp.sum(score)
             l1 += jnp.sum(jnp.abs(score.flatten() - prob[Y_tilde, Z.flatten()]))
