@@ -80,6 +80,7 @@ from tta.visualize import latexify, plot
 @click.option("--calibration_patience", type=int, required=True)
 @click.option("--calibration_tau", type=float, required=True)
 @click.option("--calibration_lr", type=float, required=True)
+@click.option("--adapt_skip_null_oracle", is_flag=True)
 @click.option("--adapt_gmtl_alpha", type=float, required=False, multiple=True)
 @click.option("--adapt_prior_strength", type=float, required=False, multiple=True)
 @click.option("--adapt_symmetric_dirichlet", type=bool, required=False, multiple=True)
@@ -124,6 +125,7 @@ def cli(
     calibration_patience: int,
     calibration_tau: float,
     calibration_lr: float,
+    adapt_skip_null_oracle: bool,
     adapt_gmtl_alpha: Sequence[float],
     adapt_prior_strength: Sequence[float],
     adapt_symmetric_dirichlet: Sequence[bool],
@@ -227,6 +229,7 @@ def cli(
             calibration_patience,
             calibration_tau,
             calibration_lr,
+            adapt_skip_null_oracle,
             adapt_gmtl_alpha,
             adapt_prior_strength,
             adapt_symmetric_dirichlet,
@@ -430,6 +433,7 @@ def main(
     calibration_patience: int,
     calibration_tau: float,
     calibration_lr: float,
+    adapt_skip_null_oracle: bool,
     adapt_gmtl_alpha: Sequence[float],
     adapt_prior_strength: Sequence[float],
     adapt_symmetric_dirichlet: Sequence[bool],
@@ -487,6 +491,7 @@ def main(
         train_domains_set,
         train_batch_size,
         calibration_domains_set,
+        adapt_skip_null_oracle,
         adapt_gmtl_alpha,
         generator,
         device_count,
@@ -550,7 +555,20 @@ def main(
     }
     pprint(all_sweeps)
 
-    jnp.savez(npz_path, **all_sweeps)
+    if npz_path.exists():
+        all_existing_sweeps = dict(**np.load(npz_path, allow_pickle=True))
+        for sweep_type in all_sweeps.keys():
+            sweeps, ylabel = all_sweeps[sweep_type]
+            existing_sweeps, existing_ylabel = all_existing_sweeps[sweep_type]
+            assert ylabel == existing_ylabel
+
+            existing_sweeps.update(sweeps)
+            all_existing_sweeps[sweep_type] = existing_sweeps, existing_ylabel
+
+        jnp.savez(npz_path, **all_existing_sweeps)
+
+    else:
+        jnp.savez(npz_path, **all_sweeps)
 
     return all_sweeps
 
@@ -881,6 +899,7 @@ def baseline_fn(
     train_domains_set: Set[int],
     train_batch_size: int,
     calibration_domains_set: Set[int],
+    adapt_skip_null_oracle: bool,
     adapt_gmtl_alpha: Sequence[float],
     generator: torch.Generator,
     device_count: int,
@@ -896,7 +915,12 @@ def baseline_fn(
     accuracy_Z_sweeps = {}
     norm_sweeps = {}
 
-    adaptations: List[Adaptation] = [("Null",), ("Oracle",)]
+    adaptations: List[Adaptation]
+    if adapt_skip_null_oracle:
+        adaptations = []
+    else:
+        adaptations = [("Null",), ("Oracle",)]
+
     adaptations.extend(("GMTL", alpha) for alpha in adapt_gmtl_alpha)
     for adaptation in adaptations:
         argmax_joint = False

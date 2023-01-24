@@ -107,39 +107,46 @@ def plot(
         _, ylabel = example[sweep_type]
         ylabel = ylabel.replace("Average AUC", "AUC")
 
-        curves_labels = [], []
+        invariance_curves_labels = [], []
+        adaptation_curves_labels = [], []
+        oracle_curves_labels = [], []
         for config, all_sweeps in npz_dict.items():
-            sweeps, ylabel = all_sweeps[sweep_type]
-            sweep = sweeps[("Null",), False, 64]
-
             domain, sub, tau = parse(config)
 
-            linestyles = {
-                "none": "dotted",
-                "classes": "dashed",
-                "groups": "solid",
+            styles = {
+                ("none", 0.0): ("C0", "o", "Vanilla"),
+                ("groups", 0.0): ("C1", "^", "SUBG"),
+                ("none", 1.0): ("C2", "s", "Logit Adjustment"),
             }
-            linestyle = linestyles[sub]
+            if (sub, tau) not in styles:
+                continue
 
-            colors = {
-                0.0: "C0",
-                1.0: "C1",
-            }
-            markerfacecolor = color = colors[tau]
+            color, marker, base_label = styles[(sub, tau)]
+            markerfacecolor = color
 
-            marker = "."
-            subsampling = {
-                "none": "",
-                "classes": " (SUBY)",
-                "groups": " (SUBG)",
-            }
-            label = f"Tau = {tau}{subsampling[sub]}"
-            curves, labels = curves_labels
+            sweeps, ylabel = all_sweeps[sweep_type]
+            for ((algo, *param), argmax_joint, batch_size), sweep in sweeps.items():
+                assert not argmax_joint
+                if algo == "Null":
+                    linestyle = "dotted"
+                    label = base_label
+                    curves, labels = invariance_curves_labels
+                elif algo == "EM" and batch_size == 512:
+                    linestyle = "dashed"
+                    label = f"MLE on {base_label}"
+                    curves, labels = adaptation_curves_labels
+                elif algo == "Oracle":
+                    linestyle = "solid"
+                    label = f"Oracle on {base_label}"
+                    curves, labels = oracle_curves_labels
+                else:
+                    continue
 
-            curve, = ax.plot(confounder_strength, sweep[:-1], linestyle=linestyle, marker=marker,
-                    color=color, markerfacecolor=markerfacecolor, linewidth=2.5, markersize=16)
-            curves.append(curve)
-            labels.append(label)
+                curve, = ax.plot(confounder_strength, sweep[:-1],
+                        linestyle=linestyle, marker=marker, linewidth=1, markersize=2,
+                        color=color, markerfacecolor=markerfacecolor, alpha=1.0)
+                curves.append(curve)
+                labels.append(label)
 
             ax.axvline(confounder_strength[domain], color="black", linestyle="dotted", linewidth=3)
 
@@ -153,7 +160,11 @@ def plot(
         plt.ylabel(ylabel)
         plt.title(merged_title)
         plt.grid(True)
-        plt.legend(*curves_labels, loc="upper left", bbox_to_anchor=(0.15, -0.15), ncol=3, frameon=False)
+        legend1 = plt.legend(*invariance_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
+        legend2 = plt.legend(*adaptation_curves_labels, loc="upper left", bbox_to_anchor=(1/3, -0.15), ncol=1, frameon=False)
+        plt.legend(*oracle_curves_labels, loc="upper left", bbox_to_anchor=(2/3, -0.15), ncol=1, frameon=False)
+        plt.gca().add_artist(legend1)
+        plt.gca().add_artist(legend2)
         fig.tight_layout()
 
         format_axes(ax)
