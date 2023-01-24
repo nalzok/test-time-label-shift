@@ -14,10 +14,12 @@ from tta.visualize import latexify, format_axes
 @click.option("--npz_pattern", type=str, required=True)
 @click.option("--merged_title", type=str, required=True)
 @click.option("--merged_name", type=str, required=True)
+@click.option("--descriptive_name", type=str, required=True)
 def merge(
         npz_pattern: str,
         merged_title: str,
         merged_name: str,
+        descriptive_name: str,
     ) -> None:
     npz_root = Path("npz/")
     merged_root = Path("merged/")
@@ -40,6 +42,7 @@ def merge(
         merged_title,
         merged_root,
         merged_name,
+        descriptive_name,
     )
 
 
@@ -97,6 +100,7 @@ def plot(
         merged_title: str,
         merged_root: Path,
         merged_name: str,
+        descriptive_name: str,
     ):
     example = next(iter(npz_dict.values()))
     sweep_types = example.keys()
@@ -133,7 +137,7 @@ def plot(
                     curves, labels = invariance_curves_labels
                 elif algo == "EM" and batch_size == 512:
                     linestyle = "dashed"
-                    label = f"MLE on {base_label}"
+                    label = f"TTA on {base_label}"
                     curves, labels = adaptation_curves_labels
                 elif algo == "Oracle":
                     linestyle = "solid"
@@ -142,22 +146,23 @@ def plot(
                 else:
                     continue
 
-                curve, = ax.plot(confounder_strength, sweep[:-1],
-                        linestyle=linestyle, marker=marker, linewidth=1, markersize=2,
+                confounder_strength_jitted = rand_jitter(confounder_strength)
+                curve, = ax.plot(confounder_strength_jitted, sweep[:-1],
+                        linestyle=linestyle, marker=marker, linewidth=1, markersize=4,
                         color=color, markerfacecolor=markerfacecolor, alpha=1.0)
                 curves.append(curve)
                 labels.append(label)
 
             ax.axvline(confounder_strength[domain], color="black", linestyle="dotted", linewidth=3)
 
-        # plt.ylim((0, 1))
-        if sweep_type in {"mean", "l1", "norm"}:
-            plt.ylim((0, 1))
-        else:
-            plt.ylim((0.5, 1))
+            if sweep_type in {"mean", "l1", "norm"}:
+                plt.ylim((0, 1))
+            else:
+                auc_limit = 0.98 if config.startswith("mnist_") else 0.7
+                plt.ylim((auc_limit, 1))
 
         plt.xlabel("Shift parameter")
-        plt.ylabel(ylabel)
+        plt.ylabel(f"{ylabel} ({descriptive_name})")
         plt.title(merged_title)
         plt.grid(True)
         legend1 = plt.legend(*invariance_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
@@ -174,6 +179,13 @@ def plot(
         plt.close(fig)
 
 
+# https://stackoverflow.com/a/21276920
+def rand_jitter(arr):
+    stdev = .002 * (max(arr) - min(arr))
+    return arr + np.random.randn(len(arr)) * stdev
+
+
 if __name__ == "__main__":
     latexify(width_scale_factor=2, fig_height=2)
+    np.random.seed(42)
     merge()

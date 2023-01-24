@@ -51,7 +51,7 @@ def plot(
         gmtl_curves_labels = [], []
         em_curves_labels = [], []
         tab20c = plt.get_cmap("tab20c")
-        for ((algo, *param), argmax_joint, batch_size), sweep in sweeps.items():
+        for ((algo, *param), argmax_joint, batch_size), sweep in sorted(sweeps.items()):
             del argmax_joint
             if algo == "Null":
                 linestyle = "dotted"
@@ -99,7 +99,7 @@ def plot(
                 if batch_size_max == batch_size_min:
                     color = color_max
                 else:
-                    multiplier = (batch_size - batch_size_min)/(batch_size_max - batch_size_min)
+                    multiplier = (np.log(batch_size) - np.log(batch_size_min))/(np.log(batch_size_max) - np.log(batch_size_min))
                     color = color_min + multiplier * (color_max - color_min)
 
                 markerfacecolor_min = np.array(tab20c.colors[4])

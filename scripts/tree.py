@@ -15,7 +15,7 @@ from tta.visualize import latexify, plot
 def main():
     jobs = []
 
-    for train_domain in (2, 10):
+    for train_domain in (1, 10):
         seed = 42
         generator = torch.Generator().manual_seed(seed)
 
@@ -23,7 +23,7 @@ def main():
         dataset_y_column = "EFFUSION"
         dataset_z_column = "GENDER"
         dataset_target_domain_count = 512
-        dataset_source_domain_count = 85267
+        dataset_source_domain_count = 65536
         dataset_use_embedding = True
         dataset_label_noise = 0
 
@@ -44,13 +44,14 @@ def main():
         config_name = f"chexpert-embedding_{dataset_y_column}_{dataset_z_column}_domain{train_domain}_tree_prior{prior_strength}"
         jobs.append((dataset, train_domains_set, dataset_label_noise, prior_strength, plot_title, config_name))
 
-    for train_domain in (2, 10):
+    for train_domain in (1, 10):
         seed = 42
         generator = torch.Generator().manual_seed(seed)
 
         train_domains_set = {train_domain}
         dataset_apply_rotation = False
-        dataset_label_noise = 0.1
+        dataset_feature_noise = 0.0
+        dataset_label_noise = 0.0
 
         root = Path("data/mnist")
         dataset = MultipleDomainMNIST(
@@ -58,6 +59,7 @@ def main():
             train_domains_set,
             generator,
             dataset_apply_rotation,
+            dataset_feature_noise,
             dataset_label_noise,
         )
 
@@ -85,7 +87,7 @@ def make_auc_sweeps(dataset, train_domains_set, prior_strength):
     calibration_domains_set = set()
     calibration_fraction = 0.0
 
-    train, calibration, test_splits = split(
+    (train, _), (calibration, _), test_splits = split(
         dataset,
         train_domains_set,
         train_fraction,
