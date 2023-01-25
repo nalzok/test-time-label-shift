@@ -8,11 +8,11 @@ paper-chexpert: paper-chexpert-embedding paper-chexpert-pixel
 
 
 paper-mnist:
-	for seed in 2022 2023 2024 2025 2026; do \
+	for seed in $$(seq 2022 2025); do \
 		for rot in False; do \
 			for noise in 0; do \
 				for domain in 1; do \
-					for sub in none groups classes; do \
+					for sub in none groups; do \
 						for tau in 0 1; do \
 							for train in 5000; do \
 								for cali in 0 1000; do \
@@ -66,12 +66,12 @@ paper-mnist:
 
 
 paper-chexpert-embedding:
-	for seed in 2022 2023 2024 2025 2026; do \
+	for seed in $$(seq 2022 2025); do \
 		for Y_column in EFFUSION; do \
 			for Z_column in GENDER; do \
-				for domain in 1 2 4 10; do \
+				for domain in 1; do \
 					for size in 65536; do \
-						for sub in none groups classes; do \
+						for sub in none groups; do \
 							for tau in 0 1; do \
 								for train in 5000; do \
 									for cali in 0 1000; do \
@@ -130,12 +130,12 @@ paper-chexpert-embedding:
 
 
 paper-chexpert-pixel:
-	for seed in 2022 2023 2024 2025 2026; do \
+	for seed in $$(seq 2022 2025); do \
 		for Y_column in EFFUSION; do \
 			for Z_column in GENDER; do \
-				for domain in 1 2 4 10; do \
+				for domain in 1; do \
 					for size in 65536; do \
-						for sub in classes; do \
+						for sub in none groups; do \
 							for tau in 0 1; do \
 								for train in 5000; do \
 									for cali in 0 1000; do \
