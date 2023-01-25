@@ -188,6 +188,18 @@ def plot(
                             label = base_label
                             curves, labels = invariance_curves_labels
                             markerfacecolor = color = tab20c.colors[19]
+                        elif algo == "GMTL":
+                            alpha, = param
+                            linestyle = "dashed"
+                            marker = "^"
+                            label = f"[GMTL] {alpha = }"
+                            curves, labels = invariance_curves_labels
+
+                            alpha_min, alpha_max = 0.5, 2
+                            color_min = np.array(tab20c.colors[3])
+                            color_max = np.array(tab20c.colors[0])
+                            multiplier = (alpha - alpha_min)/(alpha_max - alpha_min)
+                            markerfacecolor = color = color_min + multiplier * (color_max - color_min)
                         elif algo == "EM":
                             linestyle = "dashed"
                             label = f"TTA with batch size {batch_size}"
@@ -214,7 +226,7 @@ def plot(
                 if sweep_type in {"mean", "l1", "norm"}:
                     plt.ylim((0, 1))
                 else:
-                    auc_limit = 0.98 if dataset == "MNIST" else 0.7
+                    auc_limit = 0.98 if dataset == "mnist" else 0.7
                     plt.ylim((auc_limit, 1))
 
             plt.xlabel("Shift parameter")
@@ -230,7 +242,7 @@ def plot(
 
             format_axes(ax)
             for suffix in ("png", "pdf"):
-                plt.savefig(merged_root / f"{merged_name}_{sweep_type}_{meta_type}.{suffix}", dpi=300)
+                plt.savefig(merged_root / f"{merged_name}_{sweep_type}_{meta_type}.{suffix}", bbox_inches="tight", dpi=300)
 
             plt.close(fig)
 
@@ -238,7 +250,7 @@ def plot(
 def mean_std(sweeps: List[jnp.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
     sweeps_array = np.empty((len(sweeps), len(sweeps[0]) - 1))
     for i, sweep in enumerate(sweeps):
-        sweeps_array[i, :] = sweep[:-1] + 0.01 * np.random.randn(len(sweeps[0]) - 1)
+        sweeps_array[i, :] = sweep[:-1]
 
     mean = np.mean(sweeps_array, axis=0)
     std = np.std(sweeps_array, axis=0)
