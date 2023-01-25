@@ -191,7 +191,7 @@ paper-chexpert-pixel:
 				done \
 			done \
 		done \
-    done
+	done
 
 
 data/CheXpert/data_matrix.npz:
