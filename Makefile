@@ -8,15 +8,15 @@ paper-chexpert: paper-chexpert-embedding paper-chexpert-pixel
 
 
 paper-mnist:
-	for rot in False; do \
-		for noise in 0; do \
-			for domain in 1; do \
-				for sub in none groups classes; do \
-					for tau in 0 1; do \
-						for train in 5000; do \
-							for cali in 0 1000; do \
-								for prior in 1; do \
-									for seed in 2022; do \
+	for seed in 2022 2023 2024 2025 2026; do \
+		for rot in False; do \
+			for noise in 0; do \
+				for domain in 1; do \
+					for sub in none groups classes; do \
+						for tau in 0 1; do \
+							for train in 5000; do \
+								for cali in 0 1000; do \
+									for prior in 1; do \
 										pipenv run python3 \
 											-m tta.cli \
 											--config_name mnist_rot$${rot}_noise$${noise}_domain$${domain}_sub$${sub}_tau$${tau}_train$${train}_cali$${cali}_prior$${prior}_seed$${seed} \
@@ -44,12 +44,10 @@ paper-mnist:
 											--calibration_lr 1e-3 \
 											--adapt_gmtl_alpha 0.5 \
 											--adapt_gmtl_alpha 1 \
-											--adapt_gmtl_alpha 2 \
 											--adapt_prior_strength $${prior} \
 											--adapt_symmetric_dirichlet False \
 											--adapt_fix_marginal False \
 											--test_argmax_joint False \
-											--test_batch_size 8 \
 											--test_batch_size 64 \
 											--test_batch_size 512 \
 											--seed $${seed} \
@@ -68,16 +66,16 @@ paper-mnist:
 
 
 paper-chexpert-embedding:
-	for Y_column in EFFUSION; do \
-		for Z_column in GENDER; do \
-			for domain in 1 2 4 10; do \
-				for size in 65536; do \
-					for sub in none groups classes; do \
-						for tau in 0 1; do \
-							for train in 5000; do \
-								for cali in 0 1000; do \
-									for prior in 1; do \
-										for seed in 2022; do \
+	for seed in 2022 2023 2024 2025 2026; do \
+		for Y_column in EFFUSION; do \
+			for Z_column in GENDER; do \
+				for domain in 1 2 4 10; do \
+					for size in 65536; do \
+						for sub in none groups classes; do \
+							for tau in 0 1; do \
+								for train in 5000; do \
+									for cali in 0 1000; do \
+										for prior in 1; do \
 											pipenv run python3 \
 												-m tta.cli \
 												--config_name chexpert-embedding_$${Y_column}_$${Z_column}_domain$${domain}_size$${size}_sub$${sub}_tau$${tau}_train$${train}_cali$${cali}_prior$${prior}_seed$${seed} \
@@ -109,18 +107,16 @@ paper-chexpert-embedding:
 												--calibration_lr 1e-3 \
 												--adapt_gmtl_alpha 0.5 \
 												--adapt_gmtl_alpha 1 \
-												--adapt_gmtl_alpha 2 \
 												--adapt_prior_strength $${prior} \
 												--adapt_symmetric_dirichlet False \
 												--adapt_fix_marginal False \
 												--test_argmax_joint False \
-												--test_batch_size 8 \
 												--test_batch_size 64 \
 												--test_batch_size 512 \
 												--seed $${seed} \
 												--num_workers 48 \
 												--plot_title "" \
-												--plot_only True; \
+												--plot_only False; \
 										done \
 									done \
 								done \
@@ -134,16 +130,16 @@ paper-chexpert-embedding:
 
 
 paper-chexpert-pixel:
-	for Y_column in EFFUSION; do \
-		for Z_column in GENDER; do \
-			for domain in 1 2 4 10; do \
-				for size in 65536; do \
-					for sub in classes; do \
-						for tau in 0 1; do \
-							for train in 5000; do \
-								for cali in 0 1000; do \
-									for prior in 1; do \
-										for seed in 2022; do \
+	for seed in 2022 2023 2024 2025 2026; do \
+		for Y_column in EFFUSION; do \
+			for Z_column in GENDER; do \
+				for domain in 1 2 4 10; do \
+					for size in 65536; do \
+						for sub in classes; do \
+							for tau in 0 1; do \
+								for train in 5000; do \
+									for cali in 0 1000; do \
+										for prior in 1; do \
 											pipenv run python3 \
 												-m tta.cli \
 												--config_name chexpert-pixel_$${Y_column}_$${Z_column}_domain$${domain}_size$${size}_sub$${sub}_tau$${tau}_train$${train}_cali$${cali}_prior$${prior}_seed$${seed} \
@@ -176,12 +172,10 @@ paper-chexpert-pixel:
 												--calibration_lr 1e-3 \
 												--adapt_gmtl_alpha 0.5 \
 												--adapt_gmtl_alpha 1 \
-												--adapt_gmtl_alpha 2 \
 												--adapt_prior_strength $${prior} \
 												--adapt_symmetric_dirichlet False \
 												--adapt_fix_marginal False \
 												--test_argmax_joint False \
-												--test_batch_size 8 \
 												--test_batch_size 64 \
 												--test_batch_size 512 \
 												--seed $${seed} \
