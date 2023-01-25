@@ -1,4 +1,4 @@
-from typing import Set, Union
+from typing import Set, Tuple, Union
 
 from pathlib import Path
 import numpy as np
@@ -13,6 +13,7 @@ def plot(
     plot_title: str,
     plot_root: Path,
     config_name: str,
+    y_lim: Tuple,
 ):
     print(f"Reading from {npz_path}")
     all_sweeps = np.load(npz_path, allow_pickle=True)
@@ -113,7 +114,7 @@ def plot(
                 linestyle = "solid"
                 marker = "s"
                 scaler = 1
-                label = f"[EM] N = {batch_size}"
+                label = f"[TTA] N = {batch_size}"
                 curves, labels = em_curves_labels
             else:
                 raise ValueError(f"Unknown adaptation algorithm {algo}")
@@ -130,11 +131,14 @@ def plot(
         if sweep_type in {"mean", "l1", "norm"}:
             plt.ylim((0, 1))
         else:
-            plt.ylim((0.5, 1))
+            plt.ylim(y_lim)
+            # plt.ylim((0.98, 1))
+            # plt.ylim((0.85, 1))
+            # plt.ylim((0.5, 1))
 
         plt.xlabel("Shift parameter")
         plt.ylabel(ylabel)
-        plt.title(plot_title)
+        # plt.title(plot_title)
         plt.grid(True)
         legend1 = plt.legend(*baseline_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
         legend2 = plt.legend(*gmtl_curves_labels, loc="upper left", bbox_to_anchor=(1/3, -0.15), ncol=1, frameon=False)
