@@ -132,14 +132,15 @@ def plot(
         merged_name: str,
         descriptive_name: str,
     ):
+    tab20c = plt.get_cmap("tab20c").colors
     meta_styles = {
-        "model": {
-            ("none", 0.0): ("C0", "o", "Vanilla"),
-            ("groups", 0.0): ("C1", "^", "SUBG"),
-            ("none", 1.0): ("C2", "s", "Logit Adjustment"),
+        "major": {
+            ("none", 0.0): ("solid", "o", "Vanilla"),
+            ("none", 1.0): ("dashed", "s", "Logit Adjustment"),
+            ("groups", 0.0): ("dotted", "^", "SUBG"),
         },
-        "batch": {
-            ("none", 1.0): ("C2", "s", "Logit Adjustment"),
+        "minor": {
+            ("none", 1.0): ("solid", "o", "Logit Adjustment"),
         }
     }
     for meta_type in meta_styles.keys():
@@ -148,6 +149,7 @@ def plot(
             fig, ax = plt.subplots(figsize=(12, 6))
 
             invariance_curves_labels = [], []
+            gmtl_curves_labels = [], []
             adaptation_curves_labels = [], []
             oracle_curves_labels = [], []
 
@@ -159,66 +161,79 @@ def plot(
                 if style is None:
                     continue
 
-                color, marker, base_label = style
-                markerfacecolor = color
+                linestyle, marker, base_label = style
 
                 for ((algo, *param), argmax_joint, batch_size), sweeps in adapt2sweeps.items():
                     assert not argmax_joint
 
-                    if meta_type == "model":
+                    if meta_type == "major":
                         if algo == "Null":
-                            linestyle = "dotted"
                             label = base_label
                             curves, labels = invariance_curves_labels
-                        elif algo == "EM" and batch_size == 512:
-                            linestyle = "dashed"
-                            label = f"TTA on {base_label}"
+                            markerfacecolor = color = tab20c[16]
+                        elif algo == "GMTL" and base_label == "Vanilla" and param[0] == 1:
+                            alpha, = param
+                            label = f"GMTL (alpha {alpha})"
+                            curves, labels = gmtl_curves_labels
+                            markerfacecolor = color = tab20c[12]
+                        elif algo == "EM" and base_label == "Vanilla" and batch_size == 512:
+                            label = f"TTLSA (batch size {batch_size})"
                             curves, labels = adaptation_curves_labels
-                        elif algo == "Oracle":
-                            linestyle = "solid"
-                            label = f"Oracle on {base_label}"
+                            markerfacecolor = color = tab20c[0]
+                        elif algo == "Oracle" and base_label == "Vanilla":
+                            label = "Oracle"
                             curves, labels = oracle_curves_labels
+                            markerfacecolor = color = tab20c[4]
                         else:
                             continue
-                    elif meta_type == "batch":
-                        # NOTE: sorry for the ugly hack...
-                        tab20c = plt.get_cmap("tab20c")
+
+                    elif meta_type == "minor":
                         if algo == "Null":
-                            linestyle = "dotted"
                             label = base_label
                             curves, labels = invariance_curves_labels
-                            markerfacecolor = color = tab20c.colors[19]
-                        elif algo == "GMTL":
+                            markerfacecolor = color = tab20c[16]
+                        elif algo == "GMTL" and base_label == "Logit Adjustment" and param[0] in {0.5, 1}:
                             alpha, = param
-                            linestyle = "dashed"
-                            marker = "^"
-                            label = f"[GMTL] {alpha = }"
-                            curves, labels = invariance_curves_labels
+                            label = f"GMTL (alpha {alpha})"
+                            curves, labels = gmtl_curves_labels
 
-                            alpha_min, alpha_max = 0.5, 2
-                            color_min = np.array(tab20c.colors[3])
-                            color_max = np.array(tab20c.colors[0])
+                            alpha_min, alpha_max = 0.5, 1
+                            color_min = np.array(tab20c[14])
+                            color_max = np.array(tab20c[12])
                             multiplier = (alpha - alpha_min)/(alpha_max - alpha_min)
                             markerfacecolor = color = color_min + multiplier * (color_max - color_min)
-                        elif algo == "EM":
-                            linestyle = "dashed"
-                            label = f"TTA with batch size {batch_size}"
+                        elif algo == "EM" and batch_size > 8:
+                            label = f"TTLSA (batch size {batch_size})"
                             curves, labels = adaptation_curves_labels
-                            markerfacecolor = color = tab20c.colors[19 - int(np.log2(batch_size) / 3)]
+                            markerfacecolor = color = tab20c[3 - int(np.log2(batch_size) / 3)]
                         elif algo == "Oracle":
-                            linestyle = "solid"
                             label = f"Oracle"
                             curves, labels = oracle_curves_labels
-                            markerfacecolor = color = tab20c.colors[16]
+                            markerfacecolor = color = tab20c[4]
                         else:
                             continue
                     else:
                         raise ValueError(f"Unknown meta type {meta_type}")
 
+                    if algo == "Oracle":
+                        linewidth = 1.5
+                        markersize = 6
+                    else:
+                        linewidth = 1
+                        markersize = 4
+
+                    jitter = {
+                        "Null": 0,
+                        "GMTL": 0.005,
+                        "EM": -0.005,
+                        "Oracle": 0,
+                    }
+                    confounder_strength_jitted = confounder_strength + jitter[algo]
+
                     sweep_mean, sweep_std = mean_std(sweeps)
-                    confounder_strength_jitted = rand_jitter(confounder_strength)
                     curve = ax.errorbar(confounder_strength_jitted, sweep_mean, sweep_std,
-                            linestyle=linestyle, marker=marker, linewidth=1, markersize=4,
+                            linestyle=linestyle, marker=marker,
+                            linewidth=linewidth, markersize=markersize,
                             color=color, markerfacecolor=markerfacecolor, alpha=1.0)
                     curves.append(curve)
                     labels.append(label)
@@ -233,11 +248,26 @@ def plot(
             plt.ylabel(f"{ylabel} ({descriptive_name})")
             plt.title(merged_title)
             plt.grid(True, alpha=0.5)
-            legend1 = plt.legend(*invariance_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
-            legend2 = plt.legend(*adaptation_curves_labels, loc="upper left", bbox_to_anchor=(1/3, -0.15), ncol=1, frameon=False)
-            plt.legend(*oracle_curves_labels, loc="upper left", bbox_to_anchor=(2/3, -0.15), ncol=1, frameon=False)
-            plt.gca().add_artist(legend1)
-            plt.gca().add_artist(legend2)
+
+            if meta_type == "major":
+                legend1 = plt.legend(*adaptation_curves_labels, loc="upper left", bbox_to_anchor=(0.5, -0.15), ncol=1, frameon=False)
+                legend2 = plt.legend(*gmtl_curves_labels, loc="upper left", bbox_to_anchor=(0.25, -0.15), ncol=1, frameon=False)
+                legend3 = plt.legend(*oracle_curves_labels, loc="upper left", bbox_to_anchor=(0.8, -0.15), ncol=1, frameon=False)
+                plt.legend(*invariance_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
+                plt.gca().add_artist(legend1)
+                plt.gca().add_artist(legend2)
+                plt.gca().add_artist(legend3)
+            elif meta_type == "minor":
+                legend1 = plt.legend(*invariance_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
+                legend2 = plt.legend(*gmtl_curves_labels, loc="upper left", bbox_to_anchor=(0.25, -0.15), ncol=1, frameon=False)
+                legend3 = plt.legend(*oracle_curves_labels, loc="upper left", bbox_to_anchor=(0.8, -0.15), ncol=1, frameon=False)
+                plt.legend(*adaptation_curves_labels, loc="upper left", bbox_to_anchor=(0.5, -0.15), ncol=1, frameon=False)
+                plt.gca().add_artist(legend1)
+                plt.gca().add_artist(legend2)
+                plt.gca().add_artist(legend3)
+            else:
+                raise ValueError(f"Unknown meta type {meta_type}")
+
             fig.tight_layout()
 
             format_axes(ax)
@@ -255,12 +285,6 @@ def mean_std(sweeps: List[jnp.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
     mean = np.mean(sweeps_array, axis=0)
     std = np.std(sweeps_array, axis=0)
     return mean, std
-
-
-# https://stackoverflow.com/a/21276920
-def rand_jitter(arr):
-    stdev = .002 * (max(arr) - min(arr))
-    return arr + np.random.randn(len(arr)) * stdev
 
 
 if __name__ == "__main__":
