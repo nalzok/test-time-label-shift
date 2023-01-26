@@ -219,8 +219,7 @@ merge:
 						-m scripts.merge \
 						--npz_pattern "mnist_rotFalse_noise$${noise}_domain$${domain}_sub*_tau*_train5000_cali$${cali}_prior1_seed????.npz" \
 						--merged_title "" \
-						--merged_name "mnist-domain$${domain}-noise$${noise}-cali$${cali}" \
-						--descriptive_name $$(python3 -c "print(f\"{'without' if $${cali} == 0 else 'with'}-calibration\")"); \
+						--merged_name "mnist-domain$${domain}-noise$${noise}-cali$${cali}"; \
 			done \
 		done \
 	done
@@ -231,8 +230,7 @@ merge:
 	# 				-m scripts.merge \
 	# 				--npz_pattern "chexpert-embedding_EFFUSION_GENDER_domain$${domain}_size65536_sub*_tau*_train5000_cali$${cali}_prior1_seed????.npz" \
 	# 				--merged_title "" \
-	# 				--merged_name "chexpert-embedding-domain$${domain}-cali$${cali}" \
-	# 				--descriptive_name $$(python3 -c "print(f\"{'without' if $${cali} == 0 else 'with'}-calibration\")"); \
+	# 				--merged_name "chexpert-embedding-domain$${domain}-cali$${cali}"; \
 	# 	done \
 	# done
 	# for domain in 1; do \
@@ -242,7 +240,6 @@ merge:
 	# 				-m scripts.merge \
 	# 				--npz_pattern "chexpert-pixel_EFFUSION_GENDER_domain$${domain}_size65536_sub*_tau*_train5000_cali$${cali}_prior1_seed????.npz" \
 	# 				--merged_title "" \
-	# 				--merged_name "chexpert-pixel-domain$${domain}-cali$${cali}" \
-	# 				--descriptive_name $$(python3 -c "print(f\"{'without' if $${cali} == 0 else 'with'}-calibration\")"); \
+	# 				--merged_name "chexpert-pixel-domain$${domain}-cali$${cali}"; \
 	# 	done \
 	# done

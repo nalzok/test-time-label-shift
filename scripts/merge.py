@@ -13,7 +13,7 @@ from tta.visualize import latexify, format_axes
 
 
 Dataset = Union[Literal["mnist"], Literal["chexpert"], Literal["mimic"]]
-ConfigKey = Tuple[Dataset, int, str, float]
+ConfigKey = Tuple[Dataset, int, str, float, int]
 AdaptKey = Tuple[Adaptation, bool, int]
 
 
@@ -21,12 +21,10 @@ AdaptKey = Tuple[Adaptation, bool, int]
 @click.option("--npz_pattern", type=str, required=True)
 @click.option("--merged_title", type=str, required=True)
 @click.option("--merged_name", type=str, required=True)
-@click.option("--descriptive_name", type=str, required=True)
 def merge(
         npz_pattern: str,
         merged_title: str,
         merged_name: str,
-        descriptive_name: str,
     ) -> None:
     npz_root = Path("npz/")
     merged_root = Path("merged/")
@@ -50,18 +48,17 @@ def merge(
         merged_title,
         merged_root,
         merged_name,
-        descriptive_name,
     )
 
 
-def key(path: Path) -> Tuple[Dataset, int, int, float]:
-    dataset, domain, sub, tau = parse(path.stem)
+def key(path: Path) -> Tuple[Dataset, int, int, float, int]:
+    dataset, domain, sub, tau, cali = parse(path.stem)
     mapping = {
         "none": 0,
         "classes": 1,
         "groups": 2,
     }
-    return dataset, domain, mapping[sub], tau
+    return dataset, domain, mapping[sub], tau, cali
 
 
 def collect(npz_dict: Dict[str, Dict[str, Tuple[Curves, str]]]) -> Tuple[
@@ -120,7 +117,7 @@ def parse(config: str) -> ConfigKey:
     else:
         raise ValueError(f"Unknown config {config}")
 
-    return dataset, domain, sub, tau
+    return dataset, domain, sub, tau, cali
 
 
 def plot(
@@ -130,12 +127,11 @@ def plot(
         merged_title: str,
         merged_root: Path,
         merged_name: str,
-        descriptive_name: str,
     ):
     tab20c = plt.get_cmap("tab20c").colors
     meta_styles = {
         "major": {
-            ("none", 0.0): ("solid", "o", "Vanilla"),
+            ("none", 0.0): ("solid", "o", "Unadapted"),
             ("none", 1.0): ("dashed", "s", "Logit Adjustment"),
             ("groups", 0.0): ("dotted", "^", "SUBG"),
         },
@@ -154,7 +150,7 @@ def plot(
             oracle_curves_labels = [], []
 
             config2adapt2sweeps = type2config2adapt2sweeps[sweep_type]
-            for (dataset, domain, sub, tau), adapt2sweeps in config2adapt2sweeps.items():
+            for (dataset, domain, sub, tau, cali), adapt2sweeps in config2adapt2sweeps.items():
                 ax.axvline(confounder_strength[domain], color="black", linestyle="dotted", linewidth=3)
 
                 style = styles.get((sub, tau))
@@ -171,16 +167,16 @@ def plot(
                             label = base_label
                             curves, labels = invariance_curves_labels
                             markerfacecolor = color = tab20c[16]
-                        elif algo == "GMTL" and base_label == "Vanilla" and param[0] == 1:
+                        elif algo == "GMTL" and base_label == "Unadapted" and param[0] == 1:
                             alpha, = param
                             label = f"GMTL (alpha {alpha})"
                             curves, labels = gmtl_curves_labels
                             markerfacecolor = color = tab20c[12]
-                        elif algo == "EM" and base_label == "Vanilla" and batch_size == 512:
+                        elif algo == "EM" and base_label == "Unadapted" and batch_size == 512:
                             label = f"TTLSA (batch size {batch_size})"
                             curves, labels = adaptation_curves_labels
                             markerfacecolor = color = tab20c[0]
-                        elif algo == "Oracle" and base_label == "Vanilla":
+                        elif algo == "Oracle" and base_label == "Unadapted":
                             label = "Oracle"
                             curves, labels = oracle_curves_labels
                             markerfacecolor = color = tab20c[4]
@@ -244,8 +240,12 @@ def plot(
                     auc_limit = 0.98 if dataset == "mnist" else 0.7
                     plt.ylim((auc_limit, 1))
 
-            plt.xlabel("Shift parameter")
-            plt.ylabel(f"{ylabel} ({descriptive_name})")
+                plt.xlabel("Shift parameter")
+                if cali == 0:
+                    plt.ylabel(f"{ylabel} (without calibration)")
+                else:
+                    plt.ylabel(ylabel)
+
             plt.title(merged_title)
             plt.grid(True, alpha=0.5)
 
