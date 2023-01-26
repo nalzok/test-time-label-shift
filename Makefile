@@ -247,13 +247,13 @@ merge:
 					--merged_name "chexpert-embedding-domain$${domain}-cali$${cali}"; \
 		done \
 	done
-	# for domain in 1; do \
-	# 	for cali in 0 1000; do \
-	# 		env JAX_PLATFORMS="cpu" \
-	# 			pipenv run python3 \
-	# 				-m scripts.merge \
-	# 				--npz_pattern "chexpert-pixel_EFFUSION_GENDER_domain$${domain}_size65536_sub*_tau*_train5000_cali$${cali}_prior1_seed????.npz" \
-	# 				--merged_title "" \
-	# 				--merged_name "chexpert-pixel-domain$${domain}-cali$${cali}"; \
-	# 	done \
-	# done
+	for domain in 1; do \
+		for cali in 0 1000; do \
+			env JAX_PLATFORMS="cpu" \
+				pipenv run python3 \
+					-m scripts.merge \
+					--npz_pattern "chexpert-pixel_EFFUSION_GENDER_domain$${domain}_size65536_sub*_tau*_train5000_cali$${cali}_prior1_seed????.npz" \
+					--merged_title "" \
+					--merged_name "chexpert-pixel-domain$${domain}-cali$${cali}"; \
+		done \
+	done
