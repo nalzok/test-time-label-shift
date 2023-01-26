@@ -207,10 +207,24 @@ manova:
 
 
 tree:
-	env JAX_PLATFORMS="cpu" pipenv run python3 -m scripts.tree
+	for seed in $$(seq 2022 2025); do \
+		env JAX_PLATFORMS="cpu" pipenv run python3 -m scripts.tree --seed $${seed}; \
+	done
 
 
 merge:
+	env JAX_PLATFORMS="cpu" \
+		pipenv run python3 \
+			-m scripts.merge \
+			--npz_pattern "tree_mnist_rotFalse_noise0_domain1_prior1_seed????.npz" \
+			--merged_title "" \
+			--merged_name "tree_mnist-domain1-noise0"
+	env JAX_PLATFORMS="cpu" \
+		pipenv run python3 \
+			-m scripts.merge \
+			--npz_pattern "tree_chexpert-embedding_EFFUSION_GENDER_domain1_size65536_prior1_seed????.npz" \
+			--merged_title "" \
+			--merged_name "tree_chexpert-embedding-domain1"
 	for noise in 0; do \
 		for domain in 1; do \
 			for cali in 0 1000; do \
@@ -223,16 +237,16 @@ merge:
 			done \
 		done \
 	done
-	# for domain in 1; do \
-	# 	for cali in 1000; do \
-	# 		env JAX_PLATFORMS="cpu" \
-	# 			pipenv run python3 \
-	# 				-m scripts.merge \
-	# 				--npz_pattern "chexpert-embedding_EFFUSION_GENDER_domain$${domain}_size65536_sub*_tau*_train5000_cali$${cali}_prior1_seed????.npz" \
-	# 				--merged_title "" \
-	# 				--merged_name "chexpert-embedding-domain$${domain}-cali$${cali}"; \
-	# 	done \
-	# done
+	for domain in 1; do \
+		for cali in 0 1000; do \
+			env JAX_PLATFORMS="cpu" \
+				pipenv run python3 \
+					-m scripts.merge \
+					--npz_pattern "chexpert-embedding_EFFUSION_GENDER_domain$${domain}_size65536_sub*_tau*_train5000_cali$${cali}_prior1_seed????.npz" \
+					--merged_title "" \
+					--merged_name "chexpert-embedding-domain$${domain}-cali$${cali}"; \
+		done \
+	done
 	# for domain in 1; do \
 	# 	for cali in 0 1000; do \
 	# 		env JAX_PLATFORMS="cpu" \

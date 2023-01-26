@@ -13,7 +13,7 @@ from tta.visualize import latexify, format_axes
 
 
 Dataset = Union[Literal["mnist"], Literal["chexpert"], Literal["mimic"]]
-ConfigKey = Tuple[Dataset, int, str, float, int]
+ConfigKey = Tuple[bool, Dataset, int, str, float, int]
 AdaptKey = Tuple[Adaptation, bool, int]
 
 
@@ -51,14 +51,14 @@ def merge(
     )
 
 
-def key(path: Path) -> Tuple[Dataset, int, int, float, int]:
-    dataset, domain, sub, tau, cali = parse(path.stem)
+def key(path: Path) -> Tuple[bool, Dataset, int, int, float, int]:
+    is_tree, dataset, domain, sub, tau, cali = parse(path.stem)
     mapping = {
         "none": 0,
         "classes": 1,
         "groups": 2,
     }
-    return dataset, domain, mapping[sub], tau, cali
+    return is_tree, dataset, domain, mapping[sub], tau, cali
 
 
 def collect(npz_dict: Dict[str, Dict[str, Tuple[Curves, str]]]) -> Tuple[
@@ -81,10 +81,11 @@ def collect(npz_dict: Dict[str, Dict[str, Tuple[Curves, str]]]) -> Tuple[
 
 def parse(config: str) -> ConfigKey:
     if config.startswith("mnist_"):
-        pattern = re.compile(r"mnist_rot(True|False)_noise(\d*\.?\d*)_domain(\d+)_sub(none|classes|groups)_tau(\d*\.?\d*)_train(\d+)_cali(\d+)_prior(\d*\.?\d*)_seed(\d*\.?\d*)")
+        pattern = re.compile(r"^mnist_rot(True|False)_noise(\d*\.?\d*)_domain(\d+)_sub(none|classes|groups)_tau(\d*\.?\d*)_train(\d+)_cali(\d+)_prior(\d*\.?\d*)_seed(\d*\.?\d*)$")
         matching = pattern.fullmatch(config)
         assert matching is not None
 
+        is_tree = False
         dataset = "mnist"
         rot = bool(matching.group(1))
         noise = float(matching.group(2))
@@ -96,11 +97,28 @@ def parse(config: str) -> ConfigKey:
         prior = float(matching.group(8))
         seed = int(matching.group(9))
 
-    elif config.startswith("chexpert-") or config.startswith("mimic-"):
-        pattern = re.compile(r"(chexpert|mimic)-(embedding|pixel)_([a-zA-Z]+)_([a-zA-Z]+)_domain(\d+)_size(\d+)_sub(none|classes|groups)_tau(\d*\.?\d*)_train(\d+)_cali(\d+)_prior(\d*\.?\d*)_seed(\d*\.?\d*)")
+    elif config.startswith("tree_mnist"):
+        pattern = re.compile(r"^tree_mnist_rot(True|False)_noise(\d*\.?\d*)_domain(\d+)_prior(\d*\.?\d*)_seed(\d*\.?\d*)$")
         matching = pattern.fullmatch(config)
         assert matching is not None
 
+        is_tree = True
+        dataset = "mnist"
+        rot = bool(matching.group(1))
+        noise = float(matching.group(2))
+        domain = int(matching.group(3))
+        sub = "none"
+        tau = 0
+        cali = 0
+        prior = float(matching.group(4))
+        seed = int(matching.group(5))
+
+    elif config.startswith("chexpert-") or config.startswith("mimic-"):
+        pattern = re.compile(r"^(chexpert|mimic)-(embedding|pixel)_([a-zA-Z]+)_([a-zA-Z]+)_domain(\d+)_size(\d+)_sub(none|classes|groups)_tau(\d*\.?\d*)_train(\d+)_cali(\d+)_prior(\d*\.?\d*)_seed(\d*\.?\d*)$")
+        matching = pattern.fullmatch(config)
+        assert matching is not None
+
+        is_tree = False
         dataset = matching.group(1)
         modality = matching.group(2)
         Y_column = matching.group(3)
@@ -114,10 +132,28 @@ def parse(config: str) -> ConfigKey:
         prior = float(matching.group(11))
         seed = int(matching.group(12))
 
+    elif config.startswith("tree_chexpert-") or config.startswith("tree_mimic-"):
+        pattern = re.compile(r"^tree_(chexpert|mimic)-(embedding|pixel)_([a-zA-Z]+)_([a-zA-Z]+)_domain(\d+)_size(\d+)_prior(\d*\.?\d*)_seed(\d*\.?\d*)$")
+        matching = pattern.fullmatch(config)
+        assert matching is not None
+
+        is_tree = True
+        dataset = matching.group(1)
+        modality = matching.group(2)
+        Y_column = matching.group(3)
+        Z_column = matching.group(4)
+        domain = int(matching.group(5))
+        size = int(matching.group(6))
+        sub = "none"
+        tau = 0
+        cali = 0
+        prior = float(matching.group(7))
+        seed = int(matching.group(8))
+
     else:
         raise ValueError(f"Unknown config {config}")
 
-    return dataset, domain, sub, tau, cali
+    return is_tree, dataset, domain, sub, tau, cali
 
 
 def plot(
@@ -150,7 +186,7 @@ def plot(
             oracle_curves_labels = [], []
 
             config2adapt2sweeps = type2config2adapt2sweeps[sweep_type]
-            for (dataset, domain, sub, tau, cali), adapt2sweeps in config2adapt2sweeps.items():
+            for (is_tree, dataset, domain, sub, tau, cali), adapt2sweeps in config2adapt2sweeps.items():
                 ax.axvline(confounder_strength[domain], color="black", linestyle="dotted", linewidth=3)
 
                 style = styles.get((sub, tau))
@@ -172,7 +208,7 @@ def plot(
                             label = f"GMTL (alpha {alpha})"
                             curves, labels = gmtl_curves_labels
                             markerfacecolor = color = tab20c[12]
-                        elif algo == "EM" and base_label == "Unadapted" and batch_size == 512:
+                        elif algo == "EM" and base_label == "Unadapted" and batch_size >= 512:
                             label = f"TTLSA (batch size {batch_size})"
                             curves, labels = adaptation_curves_labels
                             markerfacecolor = color = tab20c[0]
@@ -236,6 +272,9 @@ def plot(
 
                 if sweep_type in {"mean", "l1", "norm"}:
                     plt.ylim((0, 1))
+                elif is_tree:
+                    auc_limit = 0.9 if dataset == "mnist" else 0.7
+                    plt.ylim((auc_limit, 1))
                 else:
                     auc_limit = 0.98 if dataset == "mnist" else 0.7
                     plt.ylim((auc_limit, 1))
@@ -251,7 +290,7 @@ def plot(
 
             if meta_type == "major":
                 legend1 = plt.legend(*adaptation_curves_labels, loc="upper left", bbox_to_anchor=(0.5, -0.15), ncol=1, frameon=False)
-                legend2 = plt.legend(*gmtl_curves_labels, loc="upper left", bbox_to_anchor=(0.25, -0.15), ncol=1, frameon=False)
+                legend2 = plt.legend(*gmtl_curves_labels, loc="upper left", bbox_to_anchor=(0.23, -0.15), ncol=1, frameon=False)
                 legend3 = plt.legend(*oracle_curves_labels, loc="upper left", bbox_to_anchor=(0.8, -0.15), ncol=1, frameon=False)
                 plt.legend(*invariance_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
                 plt.gca().add_artist(legend1)
@@ -259,7 +298,7 @@ def plot(
                 plt.gca().add_artist(legend3)
             elif meta_type == "minor":
                 legend1 = plt.legend(*invariance_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
-                legend2 = plt.legend(*gmtl_curves_labels, loc="upper left", bbox_to_anchor=(0.25, -0.15), ncol=1, frameon=False)
+                legend2 = plt.legend(*gmtl_curves_labels, loc="upper left", bbox_to_anchor=(0.23, -0.15), ncol=1, frameon=False)
                 legend3 = plt.legend(*oracle_curves_labels, loc="upper left", bbox_to_anchor=(0.8, -0.15), ncol=1, frameon=False)
                 plt.legend(*adaptation_curves_labels, loc="upper left", bbox_to_anchor=(0.5, -0.15), ncol=1, frameon=False)
                 plt.gca().add_artist(legend1)

@@ -1,6 +1,7 @@
 from pathlib import Path
 from itertools import count
 
+import click
 import numpy as np
 import torch
 from sklearn.ensemble import HistGradientBoostingClassifier
@@ -12,11 +13,34 @@ from tta.datasets import split
 from tta.visualize import latexify, plot
 
 
-def main():
+@click.command()
+@click.option("--seed", type=int, required=True)
+def main(seed: int):
     jobs = []
 
     for train_domain in (1,):
-        seed = 42
+        generator = torch.Generator().manual_seed(seed)
+
+        train_domains_set = {train_domain}
+        dataset_apply_rotation = False
+        dataset_feature_noise = 0
+        dataset_label_noise = 0
+
+        root = Path("data/mnist")
+        dataset = MultipleDomainMNIST(
+            root,
+            train_domains_set,
+            generator,
+            dataset_apply_rotation,
+            dataset_feature_noise,
+            dataset_label_noise,
+        )
+
+        prior_strength = 1
+        config_name = f"tree_mnist_rot{dataset_apply_rotation}_noise{dataset_label_noise}_domain{train_domain}_prior{prior_strength}_seed{seed}"
+        jobs.append((dataset, train_domains_set, dataset_label_noise, prior_strength, config_name))
+
+    for train_domain in (1,):
         generator = torch.Generator().manual_seed(seed)
 
         train_domains_set = {train_domain}
@@ -40,35 +64,10 @@ def main():
         )
 
         prior_strength = 1
-        plot_title = "CheXpert-embeddings (Gradient Boosting)"
-        config_name = f"chexpert-embedding_{dataset_y_column}_{dataset_z_column}_domain{train_domain}_tree_prior{prior_strength}"
-        jobs.append((dataset, train_domains_set, dataset_label_noise, prior_strength, plot_title, config_name))
+        config_name = f"tree_chexpert-embedding_{dataset_y_column}_{dataset_z_column}_domain{train_domain}_size{dataset_source_domain_count}_prior{prior_strength}_seed{seed}"
+        jobs.append((dataset, train_domains_set, dataset_label_noise, prior_strength, config_name))
 
-    for train_domain in (1,):
-        seed = 42
-        generator = torch.Generator().manual_seed(seed)
-
-        train_domains_set = {train_domain}
-        dataset_apply_rotation = False
-        dataset_feature_noise = 0.0
-        dataset_label_noise = 0.0
-
-        root = Path("data/mnist")
-        dataset = MultipleDomainMNIST(
-            root,
-            train_domains_set,
-            generator,
-            dataset_apply_rotation,
-            dataset_feature_noise,
-            dataset_label_noise,
-        )
-
-        prior_strength = 1
-        plot_title = "ColoredMNIST (Gradient Boosting)"
-        config_name = f"mnist_rot{dataset_apply_rotation}_noise{dataset_label_noise}_domain{train_domain}_tree_prior{prior_strength}"
-        jobs.append((dataset, train_domains_set, dataset_label_noise, prior_strength, plot_title, config_name))
-
-    for dataset, train_domains_set, dataset_label_noise, prior_strength, plot_title, config_name in jobs:
+    for dataset, train_domains_set, dataset_label_noise, prior_strength, config_name in jobs:
         auc_sweeps = make_auc_sweeps(dataset, train_domains_set, prior_strength)
 
         npz_path = Path(f"npz/{config_name}.npz")
@@ -77,13 +76,9 @@ def main():
         }
         np.savez(npz_path, **all_sweeps)
 
-        if plot_title.startswith("Colored"):
-            y_lim = (0.6, 1)
-        elif plot_title.startswith("CheXpert"):
-            y_lim = (0.6, 1)
-        
         plot_root = Path("plots/")
-        plot(npz_path, dataset.confounder_strength, train_domains_set, dataset_label_noise, plot_title, plot_root, config_name, y_lim)
+        y_lim = (0.6, 1)
+        plot(npz_path, dataset.confounder_strength, train_domains_set, dataset_label_noise, "", plot_root, config_name, y_lim)
 
 
 def make_auc_sweeps(dataset, train_domains_set, prior_strength):
@@ -182,7 +177,7 @@ def make_auc_sweeps(dataset, train_domains_set, prior_strength):
     auc_gmtl_20.append(None)
     auc_em.append(None)
 
-    batch_size = len(test_splits[0][1])
+    batch_size = len(test_splits[0][0])
     auc_sweeps[("Null",), False, batch_size] = auc_unadapted
     auc_sweeps[("Oracle",), False, batch_size] = auc_oracle
     auc_sweeps[("GMTL", 0.5), False, batch_size] = auc_gmtl_05
