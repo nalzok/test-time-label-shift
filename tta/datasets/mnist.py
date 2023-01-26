@@ -111,9 +111,9 @@ class MultipleDomainMNIST(MultipleDomainDataset):
 
             self.domains.append((domain, joint_M))
 
-        cache_file.parent.mkdir(parents=True, exist_ok=True)
-        print(f'Saving cached datasets to {cache_file}')
-        torch.save(self.domains, cache_file)
+        # cache_file.parent.mkdir(parents=True, exist_ok=True)
+        # print(f'Saving cached datasets to {cache_file}')
+        # torch.save(self.domains, cache_file)
 
 
     def shift(self, images, y_tilde, conditional):

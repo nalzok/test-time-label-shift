@@ -1,4 +1,4 @@
-from typing import Set, Union
+from typing import Set, Tuple, Union, Optional
 
 from pathlib import Path
 import numpy as np
@@ -13,6 +13,7 @@ def plot(
     plot_title: str,
     plot_root: Path,
     config_name: str,
+    y_lim: Optional[Tuple],
 ):
     print(f"Reading from {npz_path}")
     all_sweeps = np.load(npz_path, allow_pickle=True)
@@ -113,7 +114,7 @@ def plot(
                 linestyle = "solid"
                 marker = "s"
                 scaler = 1
-                label = f"[EM] N = {batch_size}"
+                label = f"[TTLSA] N = {batch_size}"
                 curves, labels = em_curves_labels
             else:
                 raise ValueError(f"Unknown adaptation algorithm {algo}")
@@ -130,6 +131,8 @@ def plot(
         # plt.ylim((0, 1))
         if sweep_type in {"mean", "l1", "norm"}:
             plt.ylim((0, 1))
+        elif y_lim is not None:
+            plt.ylim(y_lim)
         else:
             plt.ylim((0.5, 1))
 

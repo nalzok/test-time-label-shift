@@ -15,7 +15,7 @@ from tta.visualize import latexify, plot
 def main():
     jobs = []
 
-    for train_domain in (1, 10):
+    for train_domain in (1,):
         seed = 42
         generator = torch.Generator().manual_seed(seed)
 
@@ -44,7 +44,7 @@ def main():
         config_name = f"chexpert-embedding_{dataset_y_column}_{dataset_z_column}_domain{train_domain}_tree_prior{prior_strength}"
         jobs.append((dataset, train_domains_set, dataset_label_noise, prior_strength, plot_title, config_name))
 
-    for train_domain in (1, 10):
+    for train_domain in (1,):
         seed = 42
         generator = torch.Generator().manual_seed(seed)
 
@@ -77,8 +77,13 @@ def main():
         }
         np.savez(npz_path, **all_sweeps)
 
+        if plot_title.startswith("Colored"):
+            y_lim = (0.6, 1)
+        elif plot_title.startswith("CheXpert"):
+            y_lim = (0.6, 1)
+        
         plot_root = Path("plots/")
-        plot(npz_path, dataset.confounder_strength, train_domains_set, dataset_label_noise, plot_title, plot_root, config_name)
+        plot(npz_path, dataset.confounder_strength, train_domains_set, dataset_label_noise, plot_title, plot_root, config_name, y_lim)
 
 
 def make_auc_sweeps(dataset, train_domains_set, prior_strength):
