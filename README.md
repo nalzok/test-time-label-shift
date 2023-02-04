@@ -14,3 +14,10 @@ To cite our paper
       primaryClass={stat.ML}
 }
 ```
+
+## How to Reproduce
+
+1. Install [Pipenv](https://pipenv.pypa.io/en/latest/) and [Pyenv](https://github.com/pyenv/pyenv#installation).
+2. Install dependence with `PIP_FIND_LINKS=https://storage.googleapis.com/jax-releases/libtpu_releases.html pipenv install --deploy`.
+3. Run experiments with `make paper-mnist`, `make paper-chexpert-embedding`, `make paper-chexpert-pixel`, and `make tree`.
+4. Aggregate experimental results and generate figures with `make merge`.
