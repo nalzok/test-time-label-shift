@@ -42,7 +42,6 @@ paper-mnist:
 											--calibration_patience 5 \
 											--calibration_tau $${tau} \
 											--calibration_lr 1e-3 \
-											--adapt_gmtl_alpha 0.5 \
 											--adapt_gmtl_alpha 1 \
 											--adapt_prior_strength $${prior} \
 											--adapt_symmetric_dirichlet False \
@@ -105,7 +104,6 @@ paper-chexpert-embedding:
 												--calibration_patience 5 \
 												--calibration_tau $${tau} \
 												--calibration_lr 1e-3 \
-												--adapt_gmtl_alpha 0.5 \
 												--adapt_gmtl_alpha 1 \
 												--adapt_prior_strength $${prior} \
 												--adapt_symmetric_dirichlet False \
@@ -170,7 +168,6 @@ paper-chexpert-pixel:
 												--calibration_patience 5 \
 												--calibration_tau $${tau} \
 												--calibration_lr 1e-3 \
-												--adapt_gmtl_alpha 0.5 \
 												--adapt_gmtl_alpha 1 \
 												--adapt_prior_strength $${prior} \
 												--adapt_symmetric_dirichlet False \
