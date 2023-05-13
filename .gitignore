@@ -297,3 +297,4 @@ merged/**.png
 merged/**.pdf
 npz/**.npz
 checkpoints/**
+frozen/**

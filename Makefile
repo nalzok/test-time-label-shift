@@ -254,3 +254,9 @@ merge:
 					--merged_name "chexpert-pixel-domain$${domain}-cali$${cali}"; \
 		done \
 	done
+
+
+freeze:
+	for seed in $$(seq 2023 2023); do \
+		pipenv run python3 -m scripts.freeze --seed $${seed}; \
+	done
