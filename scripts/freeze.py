@@ -32,9 +32,9 @@ def main(seed: int):
             calibration_fraction,
         )
 
-        test, _ = test_splits[-2]
-        # test, _ = test_splits[len(test_splits) // 2]
-        splits = [(0, train), (1, calibration), (2, test)]
+        splits = [(0, train), (1, calibration)]
+        for i, (test, _) in enumerate(test_splits):
+            splits.append((i + 2, test))
 
         metadata_split = []
         for split_id, ds in splits:
