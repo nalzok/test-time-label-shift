@@ -36,26 +36,23 @@ def main(seed: int):
         for i, (test, _) in enumerate(test_splits):
             splits.append((i + 2, test))
 
-        metadata_split = []
+        metadata_records = []
         for split_id, ds in splits:
             X, Y, _, Z = dataset2np(ds)
-            filenames = []
-            for i, embedding in enumerate(X):
-                path = Path("frozen") / name / f"{i}.npy"
+            for embedding, y, z in zip(X, Y, Z):
+                filename = f"{len(metadata_records)}.npy"
+                path = Path("frozen") / name / filename
                 path.parent.mkdir(parents=True, exist_ok=True)
-                filenames.append(path.name)
                 np.save(path, embedding)
 
-            split_ = np.ones_like(Y) * split_id
-            meta = pd.DataFrame.from_dict({
-                "filename": filenames,
-                "split": split_,
-                "y": Y,
-                "a": Z
-            })
-            metadata_split.append(meta)
+                metadata_records.append({
+                    "filename": filename,
+                    "split": split_id,
+                    "y": y,
+                    "a": z,
+                })
             
-        metadata = pd.concat(metadata_split)
+        metadata = pd.DataFrame.from_records(metadata_records)
         metadata.index.name = "id"
 
         metadata_path = Path("frozen") / f"{name}.csv"
