@@ -111,7 +111,7 @@ def make_auc_sweeps(dataset, train_domains_set, prior_strength):
     # TODO: do calibration with gradient descent or whatever
 
     # Testing
-    auc_unadapted = []
+    auc_erm = []
     auc_oracle = []
     auc_gmtl_05 = []
     auc_gmtl_10 = []
@@ -154,23 +154,23 @@ def make_auc_sweeps(dataset, train_domains_set, prior_strength):
             if np.allclose(target, old) or j > 10000:
                 break
 
-        unadapted = evaluate(prob, Y)
+        erm = evaluate(prob, Y)
         oracle = evaluate(prob_oracle, Y)
         gmtl_05 = evaluate(prob_gmtl_05, Y)
         gmtl_10 = evaluate(prob_gmtl_10, Y)
         gmtl_20 = evaluate(prob_gmtl_20, Y)
         em = evaluate(prob_em, Y)
 
-        auc_unadapted.append(unadapted)
+        auc_erm.append(erm)
         auc_oracle.append(oracle)
         auc_gmtl_05.append(gmtl_05)
         auc_gmtl_10.append(gmtl_10)
         auc_gmtl_20.append(gmtl_20)
         auc_em.append(em)
-        print("*" if i in train_domains_set else " ", f"domain #{i:<2}, {unadapted = :.4f}", f"{em = :.4f}", f"{oracle = :.4f}")
+        print("*" if i in train_domains_set else " ", f"domain #{i:<2}, {erm = :.4f}", f"{em = :.4f}", f"{oracle = :.4f}")
 
     # Dummy
-    auc_unadapted.append(None)
+    auc_erm.append(None)
     auc_oracle.append(None)
     auc_gmtl_05.append(None)
     auc_gmtl_10.append(None)
@@ -178,7 +178,7 @@ def make_auc_sweeps(dataset, train_domains_set, prior_strength):
     auc_em.append(None)
 
     batch_size = len(test_splits[0][0])
-    auc_sweeps[("Null",), False, batch_size] = auc_unadapted
+    auc_sweeps[("Null",), False, batch_size] = auc_erm
     auc_sweeps[("Oracle",), False, batch_size] = auc_oracle
     auc_sweeps[("GMTL", 0.5), False, batch_size] = auc_gmtl_05
     auc_sweeps[("GMTL", 1.0), False, batch_size] = auc_gmtl_10

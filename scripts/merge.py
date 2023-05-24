@@ -167,9 +167,9 @@ def plot(
     tab20 = plt.get_cmap("tab20").colors
     meta_styles = {
         "major": {
-            ("none", 0.0): ("solid", "o", "Unadapted"),
+            ("none", 0.0): ("solid", "o", "ERM"),
             ("none", 1.0): ("solid", "o", "Logit Adjustment"),
-            ("groups", 0.0): ("dotted", "^", "SUBG"),
+            ("groups", 0.0): ("dashed", "^", "SUBG"),
         },
     }
     for meta_type in meta_styles.keys():
@@ -177,7 +177,7 @@ def plot(
         for sweep_type, ylabel in ylabels.items():
             fig, ax = plt.subplots(figsize=(12, 6))
 
-            unadapted_curves_labels = [], []
+            erm_curves_labels = [], []
             invariance_curves_labels = [], []
             adaptation_curves_labels = [], []
 
@@ -194,22 +194,16 @@ def plot(
                 for ((algo, *param), argmax_joint, batch_size), sweeps in adapt2sweeps.items():
                     assert not argmax_joint
 
-                    adapt_on = "Unadapted" if is_tree else "Logit Adjustment"
+                    adapt_on = "ERM" if is_tree else "Logit Adjustment"
                     if meta_type == "major":
-                        if algo == "Null" and base_label == "Unadapted":
+                        if algo == "Null" and base_label == "ERM":
                             label = base_label
-                            curves, labels = unadapted_curves_labels
+                            curves, labels = erm_curves_labels
                             markerfacecolor = color = "black"
-                        elif algo == "Null" and base_label != "Unadapted":
+                        elif algo == "Null" and base_label != "ERM":
                             label = base_label
                             curves, labels = invariance_curves_labels
-                            markerfacecolor = color = tab20[2]
-                        elif algo == "GMTL" and base_label == adapt_on and param[0] == 1:
-                            alpha, = param
-                            label = f"GMTL (alpha {alpha})"
-                            linestyle = "dashed"
-                            curves, labels = invariance_curves_labels
-                            markerfacecolor = color = tab20[2]
+                            markerfacecolor = color = tab20[6] if base_label == "Logit Adjustment" else tab20[2]
                         elif algo == "EM" and base_label == adapt_on and batch_size >= 64:
                             label = f"TTLSA (batch size {batch_size})"
                             curves, labels = adaptation_curves_labels
@@ -220,7 +214,7 @@ def plot(
                             else:
                                 raise ValueError(f"Unknown batch size {batch_size}")
                         elif algo == "Oracle" and base_label == adapt_on:
-                            label = "Oracle"
+                            label = "TTLSA (oracle)"
                             curves, labels = adaptation_curves_labels
                             markerfacecolor = color = tab20[0]
                         else:
@@ -228,7 +222,7 @@ def plot(
                     else:
                         raise ValueError(f"Unknown meta type {meta_type}")
 
-                    if algo == "Oracle":
+                    if algo == "TTLSA (oracle)":
                         linewidth = 1.5
                         markersize = 6
                     else:
@@ -237,7 +231,6 @@ def plot(
 
                     jitter = {
                         "Null": 0,
-                        "GMTL": 0.005,
                         "EM": -0.005,
                         "Oracle": 0,
                     }
@@ -283,7 +276,7 @@ def plot(
 
                 legend1 = plt.legend(*adaptation_curves_labels, loc="upper left", bbox_to_anchor=(2/3, -0.15), ncol=1, frameon=False)
                 legend2 = plt.legend(*invariance_curves_labels, loc="upper left", bbox_to_anchor=(1/3, -0.15), ncol=1, frameon=False)
-                plt.legend(*unadapted_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
+                plt.legend(*erm_curves_labels, loc="upper left", bbox_to_anchor=(0, -0.15), ncol=1, frameon=False)
                 plt.gca().add_artist(legend1)
                 plt.gca().add_artist(legend2)
             else:

@@ -15,6 +15,10 @@ To cite our paper
 }
 ```
 
+## PyTorch Implementation (WIP)
+
+We have a work-in-progress PyTorch implementation available at https://github.com/nalzok/BalancingGroups .
+
 ## How to Reproduce
 
 1. Install [Pipenv](https://pipenv.pypa.io/en/latest/) and [Pyenv](https://github.com/pyenv/pyenv#installation).
